@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Engine with Three.js and UI</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+        }
+
+        #scene-container {
+            position: fixed;
+        }
+
+        #ui-top-panel {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            color: white;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            box-sizing: border-box;
+            z-index: 1; /* Ensure the panel is above the 3D scene */
+        }
+
+        .ui-button {
+            padding: 10px;
+            cursor: pointer;
+            background-color: #3498db;
+            border: none;
+            color: white;
+            border-radius: 5px;
+            margin-right: 10px;
+        }
+
+        #editor-button, #config-button, #game-button, #code-button, #animation-button, #store-button, #add-object-button, #delete-object-button, #import-obj-button, #import-gltf-button {
+            margin-right: 10px;
+        }
+
+        #config-panel {
+            display: none;
+            position: fixed;
+            top: 40px;
+            left: 0;
+            width: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            color: white;
+            padding: 10px;
+            box-sizing: border-box;
+            z-index: 2; /* Ensure the panel is above the 3D scene */
+        }
+
+        #config-panel input {
+            margin-right: 10px;
+        }
+
+        #skybox-input {
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        #editor-panel {
+            display: none;
+            position: fixed;
+            top: 50px;
+            left: 0;
+            width: 200px;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            color: white;
+            padding: 10px;
+            box-sizing: border-box;
+            z-index: 3; /* Ensure the panel is above the 3D scene and config panel */
+        }
+
+        #editor-panel ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        #editor-panel li {
+            margin-bottom: 10px;
+        }
+
+        #object-config-panel {
+            display: none;
+            position: fixed;
+            top: 40px;
+            left: 210px;
+            width: 200px;
+            background-color: rgba(0, 0, 0, 0.5);
+            color: white;
+            padding: 10px;
+            box-sizing: border-box;
+            z-index: 3; /* Ensure the panel is above the 3D scene and config panel */
+        }
+
+        #object-config-panel select {
+            margin-bottom: 10px;
+        }
+
+        #object-config-panel input {
+            margin-bottom: 10px;
+        }
+
+        #object-config-panel button {
+            margin-bottom: 10px;
+        }
+
+        #particles-config-panel,
+        #slowdown-config-panel,
+        #renderer-config-panel {
+            display: none;
+            position: fixed;
+            top: 40px;
+            left: 210px;
+            width: 200px;
+            background-color: rgba(0, 0, 0, 0.5);
+            color: white;
+            padding: 10px;
+            box-sizing: border-box;
+            z-index: 3; /* Ensure the panel is above the 3D scene and config panel */
+        }
+
+        #particles-config-panel button,
+        #slowdown-config-panel button,
+        #renderer-config-panel button {
+            margin-bottom: 10px;
+        }
+
+        #fps-display {
+            position: fixed;
+            top: 60px;
+            left: 10px;
+            color: white;
+            font-size: 16px;
+            z-index: 4; /* Ensure the FPS display is above other UI elements */
+        }
+    </style>
+</head>
+<body>
+    <div id="ui-top-panel">
+        <button class="ui-button" id="editor-button">Editor 3D</button>
+        <button class="ui-button" id="game-button">Jogo</button>
+        <button class="ui-button" id="code-button">Codificações</button>
+        <button class="ui-button" id="animation-button">Animação</button>
+        <button class="ui-button" id="store-button">Loja</button>
+        <button class="ui-button" id="config-button">Configurações</button>
+        <button class="ui-button" id="add-object-button">Adicionar Objeto</button>
+        <button class="ui-button" id="delete-object-button">Apagar Objeto</button>
+        <button class="ui-button" id="import-obj-button">Importar .obj</button>
+        <button class="ui-button" id="import-gltf-button">Importar .gltf</button>
+    </div>
+    
+    <div id="config-panel">
+        <label for="grid-resolution">Resolução da Grade:</label>
+        <input type="number" id="grid-resolution" min="1" value="10">
+
+        <label for="skybox-texture">Textura do Skybox:</label>
+        <input type="file" id="skybox-texture" accept="image/*">
+
+        <button onclick="applyConfig()">Aplicar Configurações</button>
+    </div>
+
+    <div id="editor-panel">
+        <ul>
+            <li id="particles-button">Partículas</li>
+            <li id="slowdown-button">Slow Down</li>
+            <li id="renderer-button">Renderizador</li>
+            <!-- Adicione mais opções conforme necessário -->
+        </ul>
+    </div>
+
+    <div id="object-config-panel">
+        <label for="object-type">Tipo de Objeto:</label>
+        <select id="object-type">
+            <option value="cube">Cubo</option>
+            <option value="cylinder">Cilindro</option>
+            <option value="cone">Cone</option>
+            <option value="triangle">Triângulo</option>
+            <option value="sphere">Esfera</option>
+            <option value="capsule">Cápsula</option>
+            <option value="import-obj">Importar .obj</option>
+            <option value="import-gltf">Importar .gltf</option>
+        </select>
+
+        <label for="object-size">Tamanho do Objeto:</label>
+        <input type="number" id="object-size" min="1" value="1">
+
+        <label for="object-color">Cor do Objeto:</label>
+        <input type="color" id="object-color" value="#ff0000">
+
+        <button onclick="addObject()">Adicionar Objeto</button>
+        <button onclick="deleteObject()">Apagar Objeto</button>
+        <button onclick="closePanel('object-config-panel')">Fechar</button>
+    </div>
+
+    <div id="particles-config-panel">
+        <label for="emitter-count">Contagem de Emissores:</label>
+        <input type="number" id="emitter-count" min="1" value="1">
+
+        <label for="particle-size">Tamanho da Partícula:</label>
+        <input type="number" id="particle-size" min="0.1" step="0.1" value="1">
+
+        <label for="particle-speed">Velocidade da Partícula:</label>
+        <input type="number" id="particle-speed" min="0.1" step="0.1" value="1">
+
+        <label for="particle-quantity">Quantidade de Partículas:</label>
+        <input type="number" id="particle-quantity" min="1" value="100">
+
+        <button onclick="applyParticlesConfig()">Aplicar Configurações</button>
+        <button onclick="closePanel('particles-config-panel')">Fechar</button>
+    </div>
+
+    <div id="slowdown-config-panel">
+        <label for="slowdown-value">Valor do Slow Down:</label>
+        <input type="number" id="slowdown-value" min="1" max="60" value="1">
+
+        <button onclick="applySlowdownConfig()">Aplicar Configurações</button>
+        <button onclick="closePanel('slowdown-config-panel')">Fechar</button>
+    </div>
+
+    <div id="renderer-config-panel">
+        <label for="renderer-mode">Modo do Renderizador:</label>
+        <select id="renderer-mode">
+            <option value="lite">Lite</option>
+            <option value="advanced">Avançado</option>
+        </select>
+
+        <button onclick="applyRendererConfig()">Aplicar Configurações</button>
+        <button onclick="closePanel('renderer-config-panel')">Fechar</button>
+    </div>
+
+    <div id="fps-display"></div>
+
+    <div id="scene-container"></div>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://threejsfundamentals.org/threejs/resources/threejs/r125/examples/js/controls/OrbitControls.js"></script>
+    <script>
+        // Set up scene
+        const scene = new THREE.Scene();
+        const objects = [];
+
+        // Set up camera
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(5, 5, 5);
+        camera.lookAt(0, 0, 0);
+
+        // Set up renderer
+        const renderer = new THREE.WebGLRenderer();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        document.getElementById('scene-container').appendChild(renderer.domElement);
+
+        // Set up skybox
+        const skyboxGeometry = new THREE.BoxGeometry(1000, 1000, 1000);
+        const skyboxMaterial = new THREE.MeshBasicMaterial({
+            color: 0x87CEEB, // Céu azul
+            side: THREE.BackSide
+        });
+        const skybox = new THREE.Mesh(skyboxGeometry, skyboxMaterial);
+        scene.add(skybox);
+
+        // Set up ground (grid)
+        const gridHelper = new THREE.GridHelper(10, 10);
+        scene.add(gridHelper);
+
+        // Set up ambient light
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.2);
+        scene.add(ambientLight);
+
+        // Set up directional light for shadows
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        directionalLight.position.set(5, 10, 5);
+        directionalLight.castShadow = true;
+        scene.add(directionalLight);
+
+        // Set up camera controls
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.25;
+        controls.screenSpacePanning = false;
+        controls.maxPolarAngle = Math.PI / 2;
+
+        // FPS Counter
+        const fpsDisplay = document.getElementById('fps-display');
+        let frameCount = 0;
+        let lastTime;
+
+        // UI Logic
+        const editorButton = document.getElementById('editor-button');
+        const gameButton = document.getElementById('game-button');
+        const codeButton = document.getElementById('code-button');
+        const animationButton = document.getElementById('animation-button');
+        const storeButton = document.getElementById('store-button');
+        const configButton = document.getElementById('config-button');
+        const addObjectButton = document.getElementById('add-object-button');
+        const deleteObjectButton = document.getElementById('delete-object-button');
+        const importObjButton = document.getElementById('import-obj-button');
+        const importGltfButton = document.getElementById('import-gltf-button');
+        const configPanel = document.getElementById('config-panel');
+        const editorPanel = document.getElementById('editor-panel');
+        const objectConfigPanel = document.getElementById('object-config-panel');
+        const particlesButton = document.getElementById('particles-button');
+        const particlesConfigPanel = document.getElementById('particles-config-panel');
+        const slowdownButton = document.getElementById('slowdown-button');
+        const slowdownConfigPanel = document.getElementById('slowdown-config-panel');
+        const rendererButton = document.getElementById('renderer-button');
+        const rendererConfigPanel = document.getElementById('renderer-config-panel');
+
+        editorButton.addEventListener('click', () => {
+            // Toggle Editor panel visibility
+            editorPanel.style.display = (editorPanel.style.display === 'none' || editorPanel.style.display === '') ? 'block' : 'none';
+        });
+
+        gameButton.addEventListener('click', () => {
+            // Add logic for Jogo button
+            console.log('Jogo button clicked');
+        });
+
+        codeButton.addEventListener('click', () => {
+            // Add logic for Codificações button
+            console.log('Codificações button clicked');
+        });
+
+        animationButton.addEventListener('click', () => {
+            // Add logic for Animação button
+            console.log('Animação button clicked');
+        });
+
+        storeButton.addEventListener('click', () => {
+            // Add logic for Loja button
+            console.log('Loja button clicked');
+        });
+
+        configButton.addEventListener('click', () => {
+            // Toggle Configurações panel visibility
+            configPanel.style.display = (configPanel.style.display === 'none' || configPanel.style.display === '') ? 'block' : 'none';
+        });
+
+        addObjectButton.addEventListener('click', () => {
+            // Toggle Object Config panel visibility
+            objectConfigPanel.style.display = (objectConfigPanel.style.display === 'none' || objectConfigPanel.style.display === '') ? 'block' : 'none';
+        });
+
+        deleteObjectButton.addEventListener('click', () => {
+            // Add logic to delete selected object
+            deleteSelectedObject();
+        });
+
+        importObjButton.addEventListener('click', () => {
+            // Add logic to import .obj file
+            handleImportObject('import-obj');
+        });
+
+        importGltfButton.addEventListener('click', () => {
+            // Add logic to import .gltf file
+            handleImportObject('import-gltf');
+        });
+
+        particlesButton.addEventListener('click', () => {
+            // Toggle Particles Config panel visibility
+            particlesConfigPanel.style.display = (particlesConfigPanel.style.display === 'none' || particlesConfigPanel.style.display === '') ? 'block' : 'none';
+        });
+
+        slowdownButton.addEventListener('click', () => {
+            // Toggle Slow Down Config panel visibility
+            slowdownConfigPanel.style.display = (slowdownConfigPanel.style.display === 'none' || slowdownConfigPanel.style.display === '') ? 'block' : 'none';
+        });
+
+        rendererButton.addEventListener('click', () => {
+            // Toggle Renderer Config panel visibility
+            rendererConfigPanel.style.display = (rendererConfigPanel.style.display === 'none' || rendererConfigPanel.style.display === '') ? 'block' : 'none';
+        });
+
+        const applyConfig = () => {
+            // Add logic to apply configuration settings
+            const gridResolution = parseInt(document.getElementById('grid-resolution').value);
+            const skyboxTextureInput = document.getElementById('skybox-texture');
+            const skyboxTexture = skyboxTextureInput.files.length > 0 ? URL.createObjectURL(skyboxTextureInput.files[0]) : null;
+
+            console.log('Grid Resolution:', gridResolution);
+            console.log('Skybox Texture:', skyboxTexture);
+
+            // Add logic to update the scene based on configuration
+            updateSceneConfig(gridResolution, skyboxTexture);
+        };
+
+        const applyParticlesConfig = () => {
+            // Add logic to apply particle configuration settings
+            const emitterCount = parseInt(document.getElementById('emitter-count').value);
+            const particleSize = parseFloat(document.getElementById('particle-size').value);
+            const particleSpeed = parseFloat(document.getElementById('particle-speed').value);
+            const particleQuantity = parseInt(document.getElementById('particle-quantity').value);
+
+            console.log('Emitter Count:', emitterCount);
+            console.log('Particle Size:', particleSize);
+            console.log('Particle Speed:', particleSpeed);
+            console.log('Particle Quantity:', particleQuantity);
+
+            // Update particle system based on configuration
+            updateParticleSystem(emitterCount, particleSize, particleSpeed, particleQuantity);
+        };
+
+        const applySlowdownConfig = () => {
+            // Add logic to apply slowdown configuration settings
+            const slowdownValue = parseInt(document.getElementById('slowdown-value').value);
+
+            console.log('Slow Down Value:', slowdownValue);
+
+            // Add logic to update the scene based on slowdown configuration
+            updateSlowdownConfig(slowdownValue);
+        };
+
+        const applyRendererConfig = () => {
+            // Add logic to apply renderer configuration settings
+            const rendererMode = document.getElementById('renderer-mode').value;
+
+            console.log('Renderer Mode:', rendererMode);
+
+            // Add logic to update the scene based on renderer configuration
+            updateRendererConfig(rendererMode);
+        };
+
+        const addObject = () => {
+            // Add logic to create and add objects to the scene
+            const objectType = document.getElementById('object-type').value;
+            const objectSize = parseFloat(document.getElementById('object-size').value);
+            const objectColor = document.getElementById('object-color').value;
+
+            if (objectType === 'import-obj' || objectType === 'import-gltf') {
+                handleImportObject(objectType);
+                return;
+            }
+
+            let geometry, material, object;
+
+            switch (objectType) {
+                case 'cube':
+                    geometry = new THREE.BoxGeometry(objectSize, objectSize, objectSize);
+                    break;
+                case 'cylinder':
+                    geometry = new THREE.CylinderGeometry(objectSize / 2, objectSize / 2, objectSize, 32);
+                    break;
+                case 'cone':
+                    geometry = new THREE.ConeGeometry(objectSize / 2, objectSize, 32);
+                    break;
+                case 'triangle':
+                    geometry = new THREE.ConeGeometry(objectSize, objectSize, 3);
+                    break;
+                case 'sphere':
+                    geometry = new THREE.SphereGeometry(objectSize / 2, 32, 32);
+                    break;
+                case 'capsule':
+                    // Create a capsule as a combination of a cylinder and two hemispheres
+                    const capsuleGeometry = new THREE.CylinderGeometry(objectSize / 2, objectSize / 2, objectSize, 32);
+                    const hemisphereGeometry = new THREE.SphereGeometry(objectSize / 2, 32, 16);
+
+                    // Position the hemispheres at the ends of the cylinder
+                    const topHemisphere = new THREE.Mesh(hemisphereGeometry);
+                    topHemisphere.position.set(0, objectSize / 2, 0);
+
+                    const bottomHemisphere = new THREE.Mesh(hemisphereGeometry);
+                    bottomHemisphere.position.set(0, -objectSize / 2, 0);
+
+                    // Group the components to create the capsule
+                    const capsuleGroup = new THREE.Group();
+                    capsuleGroup.add(new THREE.Mesh(capsuleGeometry));
+                    capsuleGroup.add(topHemisphere);
+                    capsuleGroup.add(bottomHemisphere);
+
+                    scene.add(capsuleGroup);
+                    return; // Don't add the capsule directly to the scene
+                default:
+                    console.error('Unsupported object type:', objectType);
+                    return;
+            }
+
+            material = new THREE.MeshStandardMaterial({ color: objectColor });
+            object = new THREE.Mesh(geometry, material);
+            object.name = 'custom-object'; // Assign a name to identify custom objects
+            scene.add(object);
+            objects.push(object); // Keep track of custom objects for deletion
+        };
+
+        const deleteObject = () => {
+            // Add logic to delete the selected object
+            deleteSelectedObject();
+        };
+
+        const handleImportObject = (objectType) => {
+            const loader = new THREE.ObjectLoader();
+            const fileInput = document.createElement('input');
+            fileInput.type = 'file';
+            fileInput.accept = objectType === 'import-obj' ? '.obj' : '.gltf';
+            fileInput.onchange = (event) => {
+                const file = event.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = (fileEvent) => {
+                        const content = fileEvent.target.result;
+                        loadExternalObject(content, loader, objectType);
+                    };
+                    reader.readAsText(file);
+                }
+            };
+            fileInput.click();
+        };
+
+        const loadExternalObject = (content, loader, objectType) => {
+            if (objectType === 'import-obj') {
+                // Import .obj file
+                const objLoader = new THREE.OBJLoader();
+                const object = objLoader.parse(content);
+                object.name = 'custom-object'; // Assign a name to identify custom objects
+                scene.add(object);
+                objects.push(object); // Keep track of custom objects for deletion
+            } else if (objectType === 'import-gltf') {
+                // Import .gltf file
+                const gltfLoader = new THREE.GLTFLoader();
+                gltfLoader.parse(content, '', (gltf) => {
+                    const object = gltf.scene;
+                    object.name = 'custom-object'; // Assign a name to identify custom objects
+                    scene.add(object);
+                    objects.push(object); // Keep track of custom objects for deletion
+                });
+            }
+        };
+
+        const updateParticleSystem = (emitterCount, particleSize, particleSpeed, particleQuantity) => {
+            // Add logic to update the particle system based on configuration
+        };
+
+        const deleteSelectedObject = () => {
+            const selectedObject = scene.getObjectByName('custom-object');
+            if (selectedObject) {
+                scene.remove(selectedObject);
+                objects.splice(objects.indexOf(selectedObject), 1);
+            }
+        };
+
+        const closePanel = (panelId) => {
+            // Close the specified panel
+            const panel = document.getElementById(panelId);
+            panel.style.display = 'none';
+        };
+
+        const updateSceneConfig = (gridResolution, skyboxTexture) => {
+            // Add logic to update the scene based on configuration
+            gridHelper.geometry.dispose();
+            gridHelper.geometry = new THREE.GridHelper(gridResolution, gridResolution).geometry;
+
+            if (skyboxTexture) {
+                const newSkyboxMaterial = new THREE.MeshBasicMaterial({
+                    map: new THREE.TextureLoader().load(skyboxTexture),
+                    side: THREE.BackSide
+                });
+                skybox.material.dispose();
+                skybox.material = newSkyboxMaterial;
+            }
+        };
+
+        const updateSlowdownConfig = (slowdownValue) => {
+            // Add logic to update the scene based on slowdown configuration
+        };
+
+        const updateRendererConfig = (rendererMode) => {
+            // Add logic to update the scene based on renderer configuration
+            if (rendererMode === 'lite') {
+                renderer.capabilities.maxTextures = 1; // Example: Adjust renderer settings for "lite" mode
+            } else if (rendererMode === 'advanced') {
+                renderer.capabilities.maxTextures = 16; // Example: Adjust renderer settings for "advanced" mode
+            }
+        };
+
+        // Render loop
+        const animate = function () {
+            requestAnimationFrame(animate);
+
+            // Update controls
+            controls.update();
+
+            // Add animation or interaction logic here
+
+            // FPS Counter
+            frameCount++;
+            const currentTime = performance.now();
+            if (lastTime !== undefined) {
+                const elapsedMilliseconds = currentTime - lastTime;
+                const elapsedSeconds = elapsedMilliseconds / 1000;
+                const fps = Math.round(frameCount / elapsedSeconds);
+                fpsDisplay.textContent = `FPS: ${fps}`;
+            }
+            if (frameCount % 60 === 0) {
+                frameCount = 0;
+                lastTime = currentTime;
+            }
+
+            renderer.render(scene, camera);
+        };
+
+        animate();
+    </script>
+</body>
+</html>
