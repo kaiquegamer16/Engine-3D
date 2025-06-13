@@ -1,5 +1,4 @@
 
-
 class MotorJM {
     /**
      * Construtor da classe MotorJM.
@@ -94,8 +93,8 @@ class MotorJM {
     _configurarMundoFisica(opcoes = {}) {
         this.mundoFisica.gravity.copy(opcoes.gravidade || new CANNON.Vec3(0, -9.82, 0));
         this.mundoFisica.broadphase = new CANNON.SAPBroadphase(this.mundoFisica);
-        this.mundoFisica.defaultContactMaterial.friction = opcoes.friccaoPadrao || 0.7;
-        this.mundoFisica.defaultContactMaterial.restitution = opcoes.restituicaoPadrao || 0.3;
+        this.mundoFisica.defaultContactMaterial.contactEquationStiffness = 1e9; // Reduz penetração entre corpos
+        this.mundoFisica.defaultContactMaterial.contactEquationRelaxation = 4; // Contatos mais suaves
     }
 
     /** Inicializa os controles de órbita e transformação. */
@@ -182,7 +181,8 @@ class MotorJM {
             (err) => {
                 console.error(`MotorJM (Erro Textura): Não foi possível carregar a textura de '${url}' para o mapa '${mapType}'.`, err);
             });
-            try { textura.name = url.substring(url.lastIndexOf('/') + 1); } catch (e) { textura.name = url; }
+            // O nome da textura pode vir de um objeto (carregado do fileSystem) ou ser a URL (carregamento direto)
+            try { textura.name = typeof url === 'object' && url.name ? url.name : url.substring(url.lastIndexOf('/') + 1); } catch (e) { textura.name = url; }
             return textura;
         };
         
@@ -580,8 +580,9 @@ class MotorJM {
         } else if (obj.type === 'camera_jogo') { 
             if (obj.cameraHelper) {
                 this.cena.remove(obj.cameraHelper);
-                obj.cameraHelper.material.dispose();
-                obj.cameraHelper.geometry.dispose();
+                // CameraHelper não tem um .dispose() direto, mas seus materiais/geometrias sim
+                if (obj.cameraHelper.material) obj.cameraHelper.material.dispose();
+                if (obj.cameraHelper.geometry) obj.cameraHelper.geometry.dispose();
             }
         }
         
@@ -856,7 +857,7 @@ class MotorJM {
 
         if (opcoes.environmentMap !== undefined && opcoes.environmentMap !== null) {
             const source = opcoes.environmentMap; // Pode ser File (upload) ou Data URL (projeto carregado)
-            let fileUrl = typeof source === 'string' ? source : URL.createObjectURL(source);
+            let fileUrl = typeof source === 'string' ? source : (source.url || URL.createObjectURL(source)); // Se for um objeto com 'url' ou um File
             let fileName = typeof source === 'string' ? `(Embedded) ${source.substring(source.lastIndexOf('/') + 1, source.lastIndexOf(';'))}` : source.name;
 
             // Atualiza o nome da imagem ambiente na configuração da cena
@@ -872,11 +873,11 @@ class MotorJM {
                     this.cena.background = envMap; 
                     texture.dispose();
                     pmremGenerator.dispose();
-                    if (typeof source !== 'string') URL.revokeObjectURL(fileUrl); // Apenas revoga se foi criado localmente
+                    if (typeof source !== 'string' && source instanceof File) URL.revokeObjectURL(fileUrl); // Apenas revoga se foi criado localmente de um File
                     console.log(`MotorJM (Info Cena): Imagem ambiente HDR '${fileName}' carregada.`);
                 }, undefined, (err) => {
                     console.error(`MotorJM (Erro Cena): Falha ao carregar imagem ambiente HDR '${fileName}':`, err);
-                    if (typeof source !== 'string') URL.revokeObjectURL(fileUrl);
+                    if (typeof source !== 'string' && source instanceof File) URL.revokeObjectURL(fileUrl);
                 });
             } else if (fileName.match(/\.(png|jpg|jpeg)$/i) || fileUrl.startsWith('data:image/')) { // Imagens comuns
                 this.textureLoader.load(fileUrl, (texture) => {
@@ -890,15 +891,15 @@ class MotorJM {
                     ]); 
                     texture.dispose();
                     pmremGenerator.dispose();
-                    if (typeof source !== 'string') URL.revokeObjectURL(fileUrl);
+                    if (typeof source !== 'string' && source instanceof File) URL.revokeObjectURL(fileUrl);
                     console.log(`MotorJM (Info Cena): Imagem ambiente '${fileName}' carregada.`);
                 }, undefined, (err) => {
                     console.error(`MotorJM (Erro Cena): Falha ao carregar imagem ambiente '${fileName}':`, err);
-                    if (typeof source !== 'string') URL.revokeObjectURL(fileUrl);
+                    if (typeof source !== 'string' && source instanceof File) URL.revokeObjectURL(fileUrl);
                 });
             } else {
                 console.warn(`MotorJM (Aviso Cena): Tipo de arquivo para imagem ambiente não suportado: '${fileName}'.`);
-                if (typeof source !== 'string') URL.revokeObjectURL(fileUrl);
+                if (typeof source !== 'string' && source instanceof File) URL.revokeObjectURL(fileUrl);
             }
         } else if (opcoes.environmentMap === null) { // Caso o environmentMap seja explicitamente null
             this.cena.environment = null;
@@ -1227,27 +1228,51 @@ class MotorJM {
      * @param {number} toneMappingExposure - A exposição do tone mapping.
      * @param {number} pixelRatio - O pixel ratio do renderizador.
      * @param {number} shadowMapSize - O tamanho do mapa de sombras.
+     * @param {object} fogConfig - As configurações de neblina.
      * @returns {string} Uma string JavaScript serializável representando o projeto completo.
      */
     gerarDadosDoProjeto(sceneScriptContent, fileSystemData, backgroundConfig, gravity, 
-                        shadowsEnabled, shadowMapType, toneMappingEnabled, toneMappingExposure, pixelRatio, shadowMapSize) {
+                        shadowsEnabled, shadowMapType, toneMappingEnabled, toneMappingExposure, pixelRatio, shadowMapSize, fogConfig) {
         
-        // CUIDADO: JSON.stringify é seguro, mas colocar o resultado dentro de template literals (``)
-        // requer que o JSON não contenha o caractere de backtick (`) ou ${}.
-        // Para sceneScript, que pode ter qualquer coisa, a melhor prática é encapsulá-lo e decodificá-lo.
-        // Uma maneira simples é usar btoa(encodeURIComponent(...)) para o conteúdo do script
-        // que será decodificado com decodeURIComponent(atob(...)) ao carregar.
-        // Alternativamente, JSON.stringify já faz o escape necessário para strings.
-        // Vou usar JSON.stringify para o objeto completo e injetá-lo numa template string.
+        // NOVO: Função auxiliar para codificar strings com Base64
+        const encodeString = (str) => btoa(encodeURIComponent(str));
+
+        // NOVO: Função recursiva para codificar URLs e conteúdos no fileSystem
+        const encodeFileSystem = (node) => {
+            const encodedNode = {};
+            for (const key in node) {
+                if (node.hasOwnProperty(key)) {
+                    const value = node[key];
+                    if (typeof value === 'object' && value !== null && !value.type) { // É uma pasta
+                        encodedNode[key] = encodeFileSystem(value);
+                    } else if (typeof value === 'object' && value !== null && value.type) { // É um arquivo
+                        encodedNode[key] = { ...value }; // Copia as propriedades
+                        if (encodedNode[key].url) {
+                            encodedNode[key].urlEncoded = encodeString(encodedNode[key].url);
+                            delete encodedNode[key].url; // Remove a original para evitar duplicação no JSON
+                        }
+                        if (encodedNode[key].content) {
+                            encodedNode[key].contentEncoded = encodeString(encodedNode[key].content);
+                            delete encodedNode[key].content; // Remove a original
+                        }
+                    } else { // Outras propriedades (string, number, boolean)
+                        encodedNode[key] = value;
+                    }
+                }
+            }
+            return encodedNode;
+        };
+
+        const encodedFileSystem = encodeFileSystem(JSON.parse(JSON.stringify(fileSystemData))); // Deep copy e encode
 
         const projectData = {
             motorMonkeyProject: true,
-            version: "1.1", // Incrementando a versão do projeto
-            sceneScript: sceneScriptContent, // AceEditor content
-            fileSystem: fileSystemData, // Completo com Data URLs
+            version: "1.1", 
+            sceneScript: encodeString(sceneScriptContent), // Codifica o script da cena
+            sceneScriptEncoded: true, // Flag para indicar que o script está codificado
+            fileSystem: encodedFileSystem, // FileSystem com URLs e conteúdos codificados
             backgroundConfig: backgroundConfig,
             gravity: gravity,
-            // Adicionando configurações de renderização
             renderSettings: {
                 sombrasHabilitadas: shadowsEnabled,
                 tipoSombra: shadowMapType,
@@ -1256,22 +1281,14 @@ class MotorJM {
                 pixelRatio: pixelRatio,
                 shadowMapSize: shadowMapSize
             },
-            // Adicionar aqui outras configurações globais da cena (neblina)
-            fogConfig: this.cena.fog ? {
-                enabled: true,
-                color: `#${this.cena.fog.color.getHexString()}`,
-                near: this.cena.fog.near,
-                far: this.cena.fog.far
-            } : { enabled: false }
+            fogConfig: fogConfig
         };
 
         // Stringify o objeto de dados. JSON.stringify por padrão escapa aspas e outros caracteres especiais.
-        // O desafio é que o resultado do JSON.stringify será inserido dentro de um template literal (`),
-        // então precisamos ter certeza de que NENHUM backtick (`) apareça no JSON, ou que seja escapado.
-        // Para simplificar e garantir a segurança, vamos serializar o JSON e depois aplicar um escape
-        // MINIMALISTA apenas para backticks antes de injetá-lo na template string.
+        // O resultado será inserido dentro de um template literal (`), então precisamos ter certeza de que
+        // NENHUM backtick (`) apareça no JSON sem ser escapado.
         let jsonString = JSON.stringify(projectData, null, 2);
-        // Escapa backticks que podem estar no script da cena ou URLs de dados
+        // Escapa backticks que podem ter vindo de algum lugar (embora encodeURIComponent+btoa já cuide de muitos)
         jsonString = jsonString.replace(/`/g, '\\`');
 
         return `// Motor Monkey Project File (Version ${projectData.version})
