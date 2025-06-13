@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
@@ -532,7 +533,7 @@
             // NOVO: Adiciona o script padrão ao fileSystem como cena.js
             fileSystem.assets.scripts['cena.js'] = {
                 type: 'script',
-                url: null, // Data URL só será gerada no salvamento completo
+                url: `data:application/javascript;base64,${btoa(encodeURIComponent(defaultScript))}`, // Data URL para consistência
                 content: defaultScript 
             };
         }
@@ -634,12 +635,14 @@
             fileSystem.assets.scripts['cena.js'] = {
                 type: 'script',
                 content: aceEditor.getValue(),
-                url: `data:application/javascript;base64,${btoa(encodeURIComponent(aceEditor.getValue()))}` // Cria Data URL para consistência
+                // Sempre cria uma Data URL para o script principal ao salvar, mesmo que não seja usada diretamente
+                url: `data:application/javascript;base64,${btoa(encodeURIComponent(aceEditor.getValue()))}` 
             };
 
             const projectJsString = motor.gerarDadosDoProjeto(
                 aceEditor.getValue(), 
                 fileSystem, 
+                // Coleta todas as configurações globais da cena
                 motor.cena._backgroundConfig, 
                 motor.mundoFisica.gravity.toArray(),
                 motor.renderizador.shadowMap.enabled,
@@ -647,8 +650,8 @@
                 motor.renderizador.toneMapping !== THREE.NoToneMapping,
                 motor.renderizador.toneMappingExposure,
                 motor.renderizador.getPixelRatio(),
-                // Tenta obter o tamanho do mapa de sombras de uma luz direcional ativa
-                Object.values(motor.getObjetosNaCena()).find(o => o.threeObj.isDirectionalLight)?.threeObj?.shadow?.mapSize.width || 1024
+                Object.values(motor.getObjetosNaCena()).find(o => o.threeObj.isDirectionalLight)?.threeObj?.shadow?.mapSize.width || 1024,
+                motor.cena.fog // Passa o objeto fog inteiro
             );
             
             const blob = new Blob([projectJsString], { type: 'application/javascript;charset=utf-8' });
@@ -680,7 +683,10 @@
 
                             // 1. Carregar o script da cena no Ace Editor
                             if (loadedProject.sceneScript) {
-                                aceEditor.setValue(loadedProject.sceneScript, -1);
+                                // Decodifica o script da cena (se foi codificado)
+                                const decodedSceneScript = loadedProject.sceneScriptEncoded ? 
+                                    decodeURIComponent(atob(loadedProject.sceneScript)) : loadedProject.sceneScript;
+                                aceEditor.setValue(decodedSceneScript, -1);
                                 logConsole('info', 'Script da cena carregado do projeto.');
                             } else {
                                 logConsole('warning', 'Nenhum script de cena encontrado no projeto carregado.');
@@ -693,8 +699,9 @@
                                     delete fileSystem[key];
                                 }
                             }
-                            // Copia a estrutura do sistema de arquivos carregado
-                            Object.assign(fileSystem, loadedProject.fileSystem || { 'assets': { 'textures': {}, 'scripts': {} } });
+                            // Copia a estrutura do sistema de arquivos carregado e decodifica conteúdos
+                            const decodedFileSystem = decodeFileSystem(loadedProject.fileSystem || { 'assets': { 'textures': {}, 'scripts': {} } });
+                            Object.assign(fileSystem, decodedFileSystem);
                             currentPath = []; // Volta para a raiz
                             renderFileTree();
                             logConsole('info', 'Arquivos carregados no gerenciador.');
@@ -703,15 +710,12 @@
                             if (loadedProject.gravity) { 
                                 motor.configurarGravidade(...loadedProject.gravity);
                             }
-                            if (loadedProject.fogConfig) { // Assumindo que a neblina também tem uma config separada
+                            if (loadedProject.fogConfig) { 
                                 motor.configurarNeblina(loadedProject.fogConfig);
                             }
                             if (loadedProject.backgroundConfig) { 
-                                // O environmentMap pode ser apenas o nome do arquivo aqui, MotorJM precisa carregá-lo do fileSystem
-                                const envMapFile = loadedProject.backgroundConfig.environmentMapName ? 
-                                    fileSystem.assets.textures[loadedProject.backgroundConfig.environmentMapName] : null;
-                                
-                                // Passamos o Data URL ou null, MotorJM.js vai lidar com isso
+                                // O environmentMap agora é o Data URL já decodificado do fileSystem
+                                const envMapFile = fileSystem.assets.textures[loadedProject.backgroundConfig.environmentMapName];
                                 motor.configurarFundoCena({ 
                                     color: loadedProject.backgroundConfig.color, 
                                     environmentMap: envMapFile ? envMapFile.url : null 
@@ -755,6 +759,33 @@
             // Limpa o input para permitir carregar o mesmo arquivo novamente
             ui.loadProjectInput.value = ''; 
         }
+
+        // NOVO: Função para decodificar o fileSystem recursivamente
+        function decodeFileSystem(node) {
+            const decodedNode = {};
+            for (const key in node) {
+                if (node.hasOwnProperty(key)) {
+                    const value = node[key];
+                    if (typeof value === 'object' && value !== null && !value.type) { // É uma pasta
+                        decodedNode[key] = decodeFileSystem(value);
+                    } else if (typeof value === 'object' && value !== null && value.type) { // É um arquivo
+                        decodedNode[key] = { ...value }; // Copia as propriedades
+                        if (decodedNode[key].urlEncoded) {
+                            decodedNode[key].url = decodeURIComponent(atob(decodedNode[key].urlEncoded));
+                            delete decodedNode[key].urlEncoded;
+                        }
+                        if (decodedNode[key].contentEncoded) {
+                            decodedNode[key].content = decodeURIComponent(atob(decodedNode[key].contentEncoded));
+                            delete decodedNode[key].contentEncoded;
+                        }
+                    } else { // Outras propriedades (string, number, boolean)
+                        decodedNode[key] = value;
+                    }
+                }
+            }
+            return decodedNode;
+        }
+
 
         function updateUI() { const showPanels = window.innerWidth >= 768; document.getElementById('left-panel').style.display = showPanels ? 'flex' : 'none'; document.getElementById('right-panel').style.display = showPanels ? 'flex' : 'none'; }
         function updateHierarchy() { 
@@ -987,7 +1018,7 @@
                         
                         // NOVO: Adiciona a textura ao gerenciador de arquivos
                         const texturesFolder = getFolder(['assets', 'textures']);
-                        if (texturesFolder && !texturesFolder[file.name]) {
+                        if (texturesFolder && !texturesFolder[file.name]) { // Garante que não sobrescreva se já existe
                             texturesFolder[file.name] = {
                                 type: 'image',
                                 url: dataUrl,
@@ -1213,8 +1244,8 @@
 
                     currentFolder[file.name] = {
                         type: fileType,
-                        url: fileContent, 
-                        content: fileType === 'script' ? fileContent : null 
+                        url: fileContent, // Data URL para imagens/HDR e scripts
+                        content: fileType === 'script' ? fileContent : null // Conteúdo RAW para scripts
                     };
                     renderFileTree();
                     logConsole('info', `Arquivo '${file.name}' (${fileType}) carregado.`);
