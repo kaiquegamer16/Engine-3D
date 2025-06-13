@@ -1,0 +1,1447 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Motor Monkey</title>
+    <!-- Dependências Externas -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://unpkg.com/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://unpkg.com/three@0.128.0/examples/js/controls/TransformControls.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.12/ace.js" type="text/javascript" charset="utf-8"></script>
+    <script src="https://unpkg.com/cannon@0.6.2/build/cannon.min.js"></script>
+    <!-- Nova Dependência para Carregamento de HDRIs -->
+    <script src="https://unpkg.com/three@0.128.0/examples/js/loaders/RGBELoader.js"></script>
+    <script src="MotorJM.js"></script>
+
+    <style>
+        :root {
+            --cor-fundo-principal: #222;
+            --cor-painel: #333;
+            --cor-borda: #444;
+            --cor-texto: #eee;
+            --cor-editor-console: #1a1a1a;
+            --cor-botao-normal: #555;
+            --cor-botao-hover: #777;
+            --cor-botao-ativo: #007bff;
+            --cor-info: #6bcf6b;
+            --cor-erro: #ff6b6b;
+            --cor-aviso: #ffd700;
+            --altura-console-desktop: 200px;
+            --altura-console-mobile: 150px;
+        }
+        body { 
+            margin: 0; 
+            font-family: 'Segoe UI', sans-serif; 
+            background-color: var(--cor-fundo-principal); 
+            color: var(--cor-texto); 
+            overflow: hidden; 
+            display: flex; 
+            flex-direction: column; 
+            height: 100vh; 
+            width: 100vw;
+            /* NOVO: Impede seleção de texto */
+            -webkit-user-select: none;  /* Safari */
+            -moz-user-select: none;     /* Firefox */
+            -ms-user-select: none;      /* IE 10+ */
+            user-select: none;          /* Standard syntax */
+        }
+        #main-toolbar { display: flex; align-items: center; background-color: var(--cor-painel); padding: 8px 10px; border-bottom: 1px solid var(--cor-borda); gap: 10px; overflow-x: auto; white-space: nowrap; flex-shrink: 0; scrollbar-width: none; -ms-overflow-style: none; }
+        #main-toolbar::-webkit-scrollbar { display: none; }
+        #main-toolbar .logo { font-weight: bold; font-size: 1.2em; margin-right: 15px; color: white; }
+        #main-toolbar button { background-color: var(--cor-botao-normal); color: white; border: none; padding: 8px 12px; cursor: pointer; border-radius: 4px; font-size: 0.9em; transition: background-color 0.2s; display: inline-flex; align-items: center; gap: 5px; flex-shrink: 0; }
+        #main-toolbar button:hover { background-color: var(--cor-botao-hover); }
+        #main-toolbar button.ativo { background-color: var(--cor-botao-ativo); }
+        #main-toolbar button.ativo:hover { background-color: #0056b3; }
+        #main-content-container { display: flex; flex-direction: column; flex-grow: 1; overflow: hidden; padding: 10px; box-sizing: border-box; }
+        #cena-3d { flex-grow: 1; background-color: #111; border: 1px solid var(--cor-borda); border-radius: 4px; overflow: hidden; position: relative; margin-bottom: 10px; min-height: 250px; }
+        #cena-3d canvas { display: block; width: 100%; height: 100%; }
+        #left-panel, #right-panel { background-color: var(--cor-painel); border: 1px solid var(--cor-borda); border-radius: 4px; padding: 10px; box-sizing: border-box; display: none; flex-direction: column; gap: 10px; height: auto; }
+        #left-panel { width: 150px; flex-shrink: 0; }
+        #right-panel { width: 300px; flex-shrink: 0; }
+        #left-panel h4, #right-panel h4 { margin-top: 0; margin-bottom: 10px; color: var(--cor-texto); border-bottom: 1px solid var(--cor-borda); padding-bottom: 5px; }
+        #object-hierarchy { list-style: none; padding: 0; margin: 0; overflow-y: auto; flex-grow: 1; }
+        #object-hierarchy li { padding: 5px; cursor: pointer; border-radius: 3px; margin-bottom: 2px; transition: background-color 0.1s; font-size: 0.9em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        #object-hierarchy li:hover { background-color: var(--cor-botao-hover); }
+        #object-hierarchy li.selected { background-color: var(--cor-botao-ativo); font-weight: bold; }
+        #object-properties { flex-grow: 1; overflow-y: auto; padding-right: 5px; margin-bottom: 10px; }
+        #object-properties label { display: block; margin-bottom: 5px; font-size: 0.9em; font-weight: bold; }
+        #object-properties input[type="text"], #object-properties input[type="number"], #object-properties input[type="color"], #object-properties select { width: calc(100% - 12px); padding: 8px; margin-bottom: 10px; border: 1px solid #555; background-color: var(--cor-borda); color: var(--cor-texto); border-radius: 4px; font-size: 0.9em; box-sizing: border-box; }
+        #object-properties input[type="color"] { height: 38px; padding: 2px; }
+        #object-properties input[type="range"] { width: 100%; margin-bottom: 10px; }
+        .prop-row { display: flex; gap: 5px; margin-bottom: 5px; align-items: center; }
+        .prop-row .prop-label { width: 20px; text-align: center; font-weight: bold; color: #ccc; }
+        .prop-row input { margin-bottom: 0 !important; }
+        .texture-input-row { display: flex; align-items: center; gap: 5px; margin-bottom: 10px; }
+        .texture-input-row input[type="text"] { flex-grow: 1; margin: 0; font-size: 0.8em; }
+        .texture-input-row button { padding: 8px; font-size: 0.8em; flex-shrink: 0; background-color: var(--cor-botao-normal); border: none; color: white; border-radius: 4px; cursor: pointer;}
+        .texture-input-row button:hover { background-color: var(--cor-botao-hover); }
+        .property-group { border: 1px solid var(--cor-borda); border-radius: 5px; padding: 10px; margin-bottom: 10px; background-color: #2a2a2a; }
+        .property-group h5 { margin-top: 0; margin-bottom: 10px; color: var(--cor-texto); font-size: 1em; }
+        #codigo-editor-container { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 80vw; height: 60vh; z-index: 1000; background-color: var(--cor-editor-console); border: 1px solid var(--cor-borda); border-radius: 8px; box-shadow: 0 5px 15px rgba(0,0,0,0.5); display: none; flex-direction: column; overflow: hidden; }
+        #codigo-editor-container.visivel { display: flex; }
+        #codigo-editor { flex-grow: 1; width: 100%; height: 100%; font-family: 'Consolas', 'Monaco', 'Lucida Console', monospace; font-size: 0.9em; }
+        #codigo-editor-header { background-color: #2a2a2a; padding: 8px 10px; border-bottom: 1px solid var(--cor-borda); display: flex; justify-content: flex-end; gap: 10px; flex-shrink: 0; }
+        #codigo-editor-header button { background-color: var(--cor-botao-normal); color: white; border: none; padding: 6px 10px; cursor: pointer; border-radius: 4px; font-size: 0.8em; transition: background-color 0.2s; display: inline-flex; align-items: center; gap: 5px; }
+        #codigo-editor-header button:hover { background-color: var(--cor-botao-hover); }
+        #bottom-panel { background-color: var(--cor-painel); border: 1px solid var(--cor-borda); border-radius: 4px; box-sizing: border-box; display: flex; flex-direction: column; height: var(--altura-console-mobile); flex-shrink: 0; margin: 10px; margin-top: 0; }
+        #bottom-panel.hidden { display: none; }
+        #console-header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; padding: 5px 10px; background-color: #2a2a2a; border-bottom: 1px solid var(--cor-borda); flex-shrink: 0; gap: 10px; }
+        #console-header h3 { margin: 0; font-size: 1em; color: var(--cor-texto); flex-shrink: 0; }
+        .console-controls { display: flex; flex-wrap: wrap; gap: 5px; }
+        .console-controls button { background-color: var(--cor-botao-normal); color: white; border: none; padding: 5px 10px; cursor: pointer; border-radius: 4px; font-size: 0.8em; transition: background-color 0.2s; display: inline-flex; align-items: center; gap: 5px; }
+        .console-controls button.ativo { background-color: var(--cor-botao-ativo); }
+        #btn-fechar-console { margin-left: auto; font-size: 1.2em; padding: 0 5px; }
+        #console-output { flex-grow: 1; overflow-y: auto; padding: 10px; background-color: var(--cor-editor-console); color: var(--cor-texto); font-family: 'Consolas', 'Monaco', 'Lucida Console', monospace; font-size: 0.85em; margin: 0; white-space: pre-wrap; }
+        #console-output span { display: block; margin-bottom: 2px; }
+        #console-output .info { color: var(--cor-info); }
+        #console-output .warning { color: var(--cor-aviso); }
+        #console-output .error { color: var(--cor-erro); }
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.7); display: flex; justify-content: center; align-items: center; z-index: 1000; visibility: hidden; opacity: 0; transition: visibility 0s, opacity 0.3s; }
+        .modal-overlay.visivel { visibility: visible; opacity: 1; }
+        .modal-conteudo { background-color: var(--cor-painel); padding: 20px; border-radius: 8px; width: 400px; max-width: 90%; max-height: 90vh; overflow-y: auto; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2); position: relative; }
+        .modal-conteudo h3 { margin-top: 0; color: var(--cor-texto); border-bottom: 1px solid var(--cor-borda); padding-bottom: 10px; margin-bottom: 15px; }
+        .modal-conteudo label { display: block; margin-bottom: 8px; color: var(--cor-texto); }
+        .modal-conteudo input, .modal-conteudo select { width: calc(100% - 20px); padding: 8px; margin-top: 4px; border: 1px solid #555; background-color: var(--cor-borda); color: var(--cor-texto); border-radius: 4px; }
+        .modal-botoes { margin-top: 20px; text-align: right; display: flex; justify-content: flex-end; gap: 10px; }
+        .modal-botoes button { padding: 8px 15px; border: none; border-radius: 4px; cursor: pointer; transition: background-color 0.2s; }
+        .modal-botoes button:first-child { background-color: #6c757d; color: white; }
+        .modal-botoes button:last-child { background-color: #007bff; color: white; }
+        #settings-fog-enabled, #prop-physics-enabled { width: auto; margin-left: 5px; vertical-align: middle; }
+
+        /* Estilos para o Gerenciador de Arquivos */
+        #file-manager-panel {
+            background-color: var(--cor-painel);
+            border: 1px solid var(--cor-borda);
+            border-radius: 4px;
+            padding: 10px;
+            box-sizing: border-box;
+            display: none; /* Escondido por padrão */
+            flex-direction: column;
+            gap: 10px;
+            width: 300px; /* Largura padrão */
+            flex-shrink: 0;
+            position: absolute; /* Posição para sobrepor o Three.js */
+            top: 10px;
+            right: 10px;
+            height: calc(100% - 20px); /* Ocupa a altura total do container principal */
+            z-index: 500; /* Acima da cena 3D, abaixo de modais */
+        }
+        #file-manager-panel.visivel {
+            display: flex;
+        }
+        #file-manager-panel h4 {
+            margin-top: 0; margin-bottom: 10px; color: var(--cor-texto); border-bottom: 1px solid var(--cor-borda); padding-bottom: 5px;
+        }
+        #file-manager-controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            margin-bottom: 10px;
+        }
+        #file-manager-controls button {
+            background-color: var(--cor-botao-normal);
+            color: white;
+            border: none;
+            padding: 6px 10px;
+            cursor: pointer;
+            border-radius: 4px;
+            font-size: 0.8em;
+            transition: background-color 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
+        #file-manager-controls button:hover {
+            background-color: var(--cor-botao-hover);
+        }
+        #file-tree-container {
+            flex-grow: 1;
+            overflow-y: auto;
+            border: 1px solid var(--cor-borda);
+            border-radius: 4px;
+            padding: 5px;
+            background-color: #2a2a2a;
+        }
+        #file-tree {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            font-size: 0.9em;
+        }
+        #file-tree li {
+            padding: 3px 5px;
+            cursor: pointer;
+            border-radius: 3px;
+            margin-bottom: 1px;
+            display: flex;
+            align-items: center;
+        }
+        #file-tree li:hover {
+            background-color: var(--cor-botao-hover);
+        }
+        #file-tree li.selected-file {
+            background-color: var(--cor-botao-ativo);
+            font-weight: bold;
+        }
+        #file-tree li i {
+            margin-right: 5px;
+            color: #aaa;
+        }
+        #file-tree ul { /* Sub-pastas */
+            list-style: none;
+            padding-left: 15px;
+        }
+        #file-path-display {
+            font-size: 0.85em;
+            color: #bbb;
+            margin-bottom: 5px;
+            white-space: nowrap;
+            overflow-x: auto;
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+        }
+        #file-path-display::-webkit-scrollbar {
+            display: none;
+        }
+        .context-menu {
+            position: absolute;
+            background-color: var(--cor-painel);
+            border: 1px solid var(--cor-borda);
+            border-radius: 4px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+            z-index: 1001;
+            padding: 5px 0;
+            display: none;
+        }
+        .context-menu button {
+            display: block;
+            width: 100%;
+            text-align: left;
+            padding: 8px 15px;
+            background: none;
+            border: none;
+            color: var(--cor-texto);
+            cursor: pointer;
+            font-size: 0.9em;
+        }
+        .context-menu button:hover {
+            background-color: var(--cor-botao-hover);
+        }
+
+
+        @media (min-width: 768px) {
+            #main-content-container { flex-direction: row; align-items: stretch; justify-content: space-between; }
+            #left-panel { display: flex; width: 180px; margin-right: 10px; }
+            #right-panel { display: flex; width: 300px; margin-left: 0; }
+            #cena-3d { margin-left: 0; margin-right: 10px; margin-bottom: 0; }
+            
+            #codigo-editor-container { width: 60vw; height: 70vh; }
+            #bottom-panel { height: var(--altura-console-desktop); }
+
+            #file-manager-panel {
+                position: static; /* Volta para layout flexbox normal */
+                height: auto; /* Deixa o flexbox gerenciar a altura */
+                margin-left: 10px; /* Alinha ao lado do right-panel */
+                width: 300px; /* Largura para desktop */
+                order: 3; /* Ordem para aparecer depois da cena e right-panel */
+            }
+        }
+    </style>
+</head>
+<body oncontextmenu="return false;"> <!-- NOVO: Desabilita o menu de contexto padrão globalmente -->
+    <div id="main-toolbar">
+        <span class="logo">Motor Monkey</span>
+        <button id="btn-toggle-animation" title="Play/Stop Simulação"><i class="fas fa-play"></i></button>
+        <button id="btn-toggle-console" title="Mostrar/Esconder Console"><i class="fas fa-terminal"></i></button>
+        <button id="btn-add-object" title="Adicionar Objeto"><i class="fas fa-plus"></i> Adicionar</button>
+        <button id="btn-open-settings" title="Configurações da Cena"><i class="fas fa-cog"></i></button>
+        <button id="btn-toggle-script-editor" title="Editor de Script"><i class="fas fa-code"></i></button>
+        <button id="btn-recompile-script" title="Recarregar Script"><i class="fas fa-sync-alt"></i> Recarregar</button>
+        <button id="btn-generate-script" title="Gerar Script da Cena"><i class="fas fa-file-code"></i></button>
+        <button id="btn-save-project" title="Salvar Projeto Completo"><i class="fas fa-file-export"></i> Salvar Projeto</button> <!-- NOVO BOTÃO -->
+        <input type="file" id="load-project-input" accept=".js" style="display:none;"> <!-- NOVO INPUT FILE -->
+        <button id="btn-load-project" title="Carregar Projeto"><i class="fas fa-file-import"></i> Carregar Projeto</button> <!-- NOVO BOTÃO -->
+        <button id="btn-toggle-file-manager" title="Gerenciador de Arquivos"><i class="fas fa-folder"></i> Arquivos</button> 
+        <div style="margin-left:auto;"></div>
+        <button id="btn-modo-translate" title="Mover (T)" class="ativo"><i class="fas fa-arrows-alt"></i></button>
+        <button id="btn-modo-rotate" title="Rotacionar (R)"><i class="fas fa-sync-alt"></i></button>
+        <button id="btn-modo-scale" title="Escalar (S)"><i class="fas fa-expand-alt"></i></button>
+    </div>
+
+    <div id="main-content-container">
+        <div id="left-panel">
+            <h4><i class="fas fa-sitemap"></i> Hierarquia</h4>
+            <ul id="object-hierarchy"></ul>
+        </div>
+        <div id="cena-3d"></div>
+        <div id="right-panel">
+            <h4><i class="fas fa-sliders-h"></i> Propriedades</h4>
+            <div id="object-properties"><p>Selecione um objeto para ver suas propriedades.</p></div>
+        </div>
+        <!-- NOVO PAINEL DO GERENCIADOR DE ARQUIVOS -->
+        <div id="file-manager-panel">
+            <h4><i class="fas fa-folder-open"></i> Gerenciador de Arquivos</h4>
+            <div id="file-manager-controls">
+                <button id="btn-new-folder" title="Nova Pasta"><i class="fas fa-folder-plus"></i> Nova Pasta</button>
+                <input type="file" id="file-upload-input" multiple style="display:none;">
+                <button id="btn-upload-file" title="Upload de Arquivo"><i class="fas fa-upload"></i> Upload</button>
+                <button id="btn-delete-file" title="Excluir"><i class="fas fa-trash"></i> Excluir</button>
+                <button id="btn-rename-file" title="Renomear"><i class="fas fa-edit"></i> Renomear</button>
+                <button id="btn-back-folder" title="Voltar"><i class="fas fa-arrow-left"></i> Voltar</button>
+            </div>
+            <div id="file-path-display">/</div>
+            <div id="file-tree-container">
+                <ul id="file-tree"></ul>
+            </div>
+        </div>
+    </div>
+
+    <div id="codigo-editor-container">
+        <div id="codigo-editor-header">
+            <button id="btn-copy-code" title="Copiar código"><i class="fas fa-copy"></i> Copiar</button>
+            <button id="btn-close-script-editor" title="Fechar Editor"><i class="fas fa-times"></i> Fechar</button>
+        </div>
+        <div id="codigo-editor"></div>
+    </div>
+    
+    <div id="bottom-panel" class="hidden">
+        <div id="console-header">
+            <h3><i class="fas fa-terminal"></i> Console</h3>
+            <div class="console-controls">
+                <button class="btn-filter" data-filter="all" title="Mostrar Todos"><i class="fas fa-list"></i></button>
+                <button class="btn-filter" data-filter="info" title="Mostrar Informações"><i class="fas fa-info-circle"></i></button>
+                <button class="btn-filter" data-filter="warning" title="Mostrar Avisos"><i class="fas fa-exclamation-triangle"></i></button>
+                <button class="btn-filter" data-filter="error" title="Mostrar Erros"><i class="fas fa-times-circle"></i></button>
+                <button id="btn-copy-console" title="Copiar Logs Visíveis"><i class="fas fa-copy"></i></button>
+                <button id="btn-clear-console" title="Limpar Console"><i class="fas fa-trash-alt"></i></button>
+            </div>
+            <button id="btn-fechar-console" title="Fechar Console"><i class="fas fa-times"></i></button>
+        </div>
+        <pre id="console-output"></pre>
+    </div>
+
+    <div id="modal-adicionar-objeto" class="modal-overlay">
+        <div class="modal-conteudo">
+             <h3>Adicionar Novo Objeto</h3>
+             <label for="modal-obj-name">Nome do Objeto:</label>
+             <input type="text" id="modal-obj-name" placeholder="Ex: meu_cubo_1">
+             <label for="modal-obj-tipo">Tipo de Objeto:</label>
+             <select id="modal-obj-tipo">
+                 <optgroup label="Geometrias">
+                     <option value="caixa">Caixa</option>
+                     <option value="esfera">Esfera</option>
+                     <option value="plano">Plano</option>
+                 </optgroup>
+                 <optgroup label="Câmeras">
+                     <option value="camera">Câmera de Jogo</option>
+                 </optgroup>
+                 <optgroup label="Luzes">
+                     <option value="ambiente">Luz Ambiente</option>
+                     <option value="direcional">Luz Direcional</option>
+                     <option value="ponto">Luz de Ponto</option>
+                 </optgroup>
+             </select>
+             <div class="modal-botoes">
+                <button id="btn-cancelar-modal">Cancelar</button>
+                <button id="btn-adicionar-modal">Adicionar</button>
+             </div>
+        </div>
+    </div>
+    <div id="modal-configuracoes" class="modal-overlay">
+         <div class="modal-conteudo">
+             <h3>Configurações da Cena</h3>
+             <div class="property-group">
+                 <h5>Fundo da Cena</h5>
+                 <label>Cor de Fundo: <input type="color" id="settings-background-color" value="#1a1a1a"></label>
+                 <label>Imagem Ambiente (HDR/JPG/PNG):</label>
+                 <div class="texture-input-row">
+                     <input type="text" id="settings-environment-map-name" readonly value="Nenhuma">
+                     <input type="file" id="settings-environment-map-file" accept="image/*,.hdr" style="display:none">
+                     <button id="btn-load-environment-map">Carregar</button>
+                     <button id="btn-clear-environment-map">Limpar</button>
+                 </div>
+             </div>
+             <div class="property-group">
+                 <h5>Neblina</h5>
+                 <label><input type="checkbox" id="settings-fog-enabled"> Habilitar Neblina</label>
+                 <div id="settings-fog-options" style="display:none;">
+                     <label>Cor: <input type="color" id="settings-fog-color" value="#87ceeb"></label>
+                     <label>Início (perto): <input type="number" id="settings-fog-near" step="1" value="20"></label>
+                     <label>Fim (longe): <input type="number" id="settings-fog-far" step="1" value="100"></label>
+                 </div>
+             </div>
+             <div class="property-group">
+                 <h5>Gravidade (X, Y, Z)</h5>
+                 <div class="prop-row">
+                     <span class="prop-label">X</span><input type="number" id="settings-gravity-x" step="0.1" value="0">
+                     <span class="prop-label">Y</span><input type="number" id="settings-gravity-y" step="0.1" value="-9.82">
+                     <span class="prop-label">Z</span><input type="number" id="settings-gravity-z" step="0.1" value="0">
+                 </div>
+             </div>
+             <div class="property-group">
+                <h5>Renderização e Qualidade</h5>
+                <label for="settings-quality-preset">Preset de Qualidade:</label>
+                <select id="settings-quality-preset">
+                    <option value="baixa">Baixa</option>
+                    <option value="media">Média</option>
+                    <option value="alta">Alta</option>
+                </select>
+
+                <label><input type="checkbox" id="settings-shadows-enabled"> Sombras Habilitadas</label>
+                <div id="settings-shadows-options">
+                    <label for="settings-shadows-type">Tipo de Sombra:</label>
+                    <select id="settings-shadows-type">
+                        <option value="PCFSoftShadowMap">PCFSoftShadowMap (Suave)</option>
+                        <option value="BasicShadowMap">BasicShadowMap (Básico)</option>
+                        <option value="VSMShadowMap">VSMShadowMap (Experimental)</option>
+                    </select>
+                    <label for="settings-shadow-map-size">Tamanho do Mapa de Sombras:</label>
+                    <input type="number" id="settings-shadow-map-size" step="128" min="256" max="2048" value="1024">
+                </div>
+
+                <label><input type="checkbox" id="settings-tone-mapping-enabled"> Tone Mapping Habilitado</label>
+                <div id="settings-tone-mapping-options">
+                    <label for="settings-tone-mapping-exposure">Exposição do Tone Mapping:</label>
+                    <input type="number" id="settings-tone-mapping-exposure" step="0.1" value="1.0">
+                </div>
+
+                <label for="settings-pixel-ratio">Resolução (Pixel Ratio): <span id="pixel-ratio-value">1.00</span></label>
+                <input type="range" id="settings-pixel-ratio" min="0.5" max="2.0" step="0.05" value="1.0">
+             </div>
+             <div class="modal-botoes">
+                <button id="btn-cancelar-settings">Cancelar</button>
+                <button id="btn-salvar-settings">Aplicar</button>
+             </div>
+         </div>
+    </div>
+    
+    <!-- Context Menu para o Gerenciador de Arquivos -->
+    <div id="file-context-menu" class="context-menu">
+        <button id="ctx-apply-texture"><i class="fas fa-brush"></i> Aplicar como Textura</button>
+        <button id="ctx-load-script"><i class="fas fa-code"></i> Carregar como Script</button>
+        <button id="ctx-rename-file"><i class="fas fa-edit"></i> Renomear</button>
+        <button id="ctx-delete-file"><i class="fas fa-trash-alt"></i> Excluir</button>
+    </div>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', () => {
+        let motor;
+        let aceEditor;
+        let objetoSelecionadoId = null;
+        let isPlaying = false;
+        let currentConsoleFilter = 'all';
+
+        // Variáveis do Gerenciador de Arquivos
+        // NOVO: A estrutura do fileSystem agora é global e será salva/carregada
+        const fileSystem = {
+            'assets': {
+                'textures': {},
+                'scripts': {}
+            }
+        }; 
+        let currentPath = []; // Caminho atual no file system (ex: ['assets', 'textures'])
+        let selectedFileElement = null; // O <li> do arquivo/pasta selecionado na UI
+
+        const ui = {
+            btnToggleAnimation: document.getElementById('btn-toggle-animation'),
+            btnToggleConsole: document.getElementById('btn-toggle-console'),
+            btnAddObject: document.getElementById('btn-add-object'),
+            btnOpenSettings: document.getElementById('btn-open-settings'),
+            btnToggleScriptEditor: document.getElementById('btn-toggle-script-editor'),
+            btnRecompileScript: document.getElementById('btn-recompile-script'),
+            btnGenerateScript: document.getElementById('btn-generate-script'),
+            // NOVO: Botões para Salvar/Carregar Projeto
+            btnSaveProject: document.getElementById('btn-save-project'),
+            loadProjectInput: document.getElementById('load-project-input'),
+            btnLoadProject: document.getElementById('btn-load-project'),
+            
+            btnModoTranslate: document.getElementById('btn-modo-translate'),
+            btnModoRotate: document.getElementById('btn-modo-rotate'),
+            btnModoScale: document.getElementById('btn-modo-scale'),
+            objectHierarchy: document.getElementById('object-hierarchy'),
+            objectProperties: document.getElementById('object-properties'),
+            bottomPanel: document.getElementById('bottom-panel'),
+            consoleOutput: document.getElementById('console-output'),
+            codigoEditorContainer: document.getElementById('codigo-editor-container'),
+            btnCloseScriptEditor: document.getElementById('btn-close-script-editor'),
+            modalAddObject: document.getElementById('modal-adicionar-objeto'),
+            btnAdicionarModal: document.getElementById('btn-adicionar-modal'),
+            modalSettings: document.getElementById('modal-configuracoes'),
+            btnSaveSettings: document.getElementById('btn-salvar-settings'),
+            
+            settingsQualityPreset: document.getElementById('settings-quality-preset'),
+            settingsShadowsEnabled: document.getElementById('settings-shadows-enabled'),
+            settingsShadowsOptions: document.getElementById('settings-shadows-options'),
+            settingsShadowsType: document.getElementById('settings-shadows-type'),
+            settingsShadowMapSize: document.getElementById('settings-shadow-map-size'),
+            settingsToneMappingEnabled: document.getElementById('settings-tone-mapping-enabled'),
+            settingsToneMappingOptions: document.getElementById('settings-tone-mapping-options'),
+            settingsToneMappingExposure: document.getElementById('settings-tone-mapping-exposure'),
+            settingsPixelRatio: document.getElementById('settings-pixel-ratio'),
+            pixelRatioValue: document.getElementById('pixel-ratio-value'),
+            
+            settingsBackgroundColor: document.getElementById('settings-background-color'),
+            settingsEnvironmentMapName: document.getElementById('settings-environment-map-name'),
+            settingsEnvironmentMapFile: document.getElementById('settings-environment-map-file'),
+            btnLoadEnvironmentMap: document.getElementById('btn-load-environment-map'),
+            btnClearEnvironmentMap: document.getElementById('btn-clear-environment-map'),
+
+            btnToggleFileManager: document.getElementById('btn-toggle-file-manager'),
+            fileManagerPanel: document.getElementById('file-manager-panel'),
+            btnNewFolder: document.getElementById('btn-new-folder'),
+            fileUploadInput: document.getElementById('file-upload-input'),
+            btnUploadFile: document.getElementById('btn-upload-file'),
+            btnDeleteFile: document.getElementById('btn-delete-file'),
+            btnRenameFile: document.getElementById('btn-rename-file'),
+            btnBackFolder: document.getElementById('btn-back-folder'),
+            filePathDisplay: document.getElementById('file-path-display'),
+            fileTree: document.getElementById('file-tree'),
+            fileContextMenu: document.getElementById('file-context-menu'),
+            ctxApplyTexture: document.getElementById('ctx-apply-texture'),
+            ctxLoadScript: document.getElementById('ctx-load-script'),
+            ctxRenameFile: document.getElementById('ctx-rename-file'),
+            ctxDeleteFile: document.getElementById('ctx-delete-file')
+        };
+
+        function init() {
+            motor = new MotorJM('cena-3d');
+            motor.iniciar();
+            setupAceEditor();
+            setupEventListeners();
+            // A recarga inicial agora usa o script padrão, não um projeto salvo
+            recarregarCena(true); 
+            updateUI();
+            logConsole('info', 'Editor inicializado. Bem-vindo ao Motor Monkey!');
+            updateConsoleFilter('all');
+            loadGraphicSettingsUI();
+            renderFileTree(); // Renderiza o gerenciador de arquivos inicialmente
+        }
+
+        function setupAceEditor() {
+            aceEditor = ace.edit('codigo-editor');
+            aceEditor.setTheme("ace/theme/monokai");
+            aceEditor.session.setMode("ace/mode/javascript");
+            const defaultScript = `// Bem-vindo ao Motor Monkey!\n// Use a API 'motor' para criar sua cena.\n\n` +
+                                  `motor.adicionarObjeto('chao', 'Chão', 'plano', { size: { w: 50, d: 50 }, material: { color: 'cinza' }, physics: { bodyType: 'static', mass: 0, friction: 0.8, restitution: 0.2, collisionShape: 'plane', linearDamping: 0.01, angularDamping: 0.01 } });\n` +
+                                  `motor.adicionarObjeto('caixa_vermelha', 'Cubo 1', 'caixa', { position: {x:0, y:5, z:0}, material: { color: 'vermelho', roughness: 0.8, metalness: 0.1 }, physics: { bodyType: 'dynamic', mass: 1, friction: 0.5, restitution: 0.5, collisionShape: 'box', linearDamping: 0.01, angularDamping: 0.01 } });\n` +
+                                  `motor.adicionarObjeto('esfera_azul', 'Esfera 1', 'esfera', { position: {x:2, y:8, z:1}, material: { color: 'azul', roughness: 0.1, metalness: 0.9 }, physics: { bodyType: 'dynamic', mass: 2, friction: 0.3, restitution: 0.8, collisionShape: 'sphere', linearDamping: 0.01, angularDamping: 0.01 } });\n` +
+                                  `motor.adicionarObjeto('camera_principal', 'Câmera do Jogo', 'camera', { position: {x:0, y:5, z:15}, rotation: {x:0, y:0, z:0}, fov: 75, near: 0.1, far: 1000 });\n`;
+            aceEditor.setValue(defaultScript, -1);
+            // NOVO: Adiciona o script padrão ao fileSystem como cena.js
+            fileSystem.assets.scripts['cena.js'] = {
+                type: 'script',
+                url: null, // Data URL só será gerada no salvamento completo
+                content: defaultScript 
+            };
+        }
+
+        function logConsole(type, message) {
+            const span = document.createElement('span');
+            span.className = type;
+            span.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            if (currentConsoleFilter !== 'all' && type !== currentConsoleFilter) {
+                span.style.display = 'none';
+            }
+            ui.consoleOutput.appendChild(span);
+            ui.consoleOutput.scrollTop = ui.consoleOutput.scrollHeight;
+        }
+
+        function updateConsoleFilter(newFilter) {
+            currentConsoleFilter = newFilter;
+            document.querySelectorAll('.btn-filter').forEach(btn => {
+                btn.classList.toggle('ativo', btn.dataset.filter === newFilter);
+            });
+            ui.consoleOutput.querySelectorAll('span').forEach(span => {
+                const isVisible = (newFilter === 'all' || span.classList.contains(newFilter));
+                span.style.display = isVisible ? 'block' : 'none';
+            });
+        }
+
+        function copyConsoleOutput() {
+            const visibleLogs = Array.from(ui.consoleOutput.querySelectorAll('span'))
+                .filter(span => span.style.display !== 'none')
+                .map(span => span.textContent)
+                .join('\n');
+            if (visibleLogs) {
+                navigator.clipboard.writeText(visibleLogs).then(() => {
+                    logConsole('info', 'Logs visíveis copiados para a área de transferência.');
+                }, () => {
+                    logConsole('error', 'Falha ao copiar os logs.');
+                });
+            } else {
+                logConsole('warning', 'Nenhum log visível para copiar.');
+            }
+        }
+
+        function recarregarCena(isInitial = false) { 
+            if (isPlaying) togglePlayStop(); 
+            try { 
+                motor.limparCena(); 
+                // A `userCode` agora recebe o script do Ace Editor
+                const currentSceneScript = aceEditor.getValue();
+                const userCode = new Function('motor', currentSceneScript); 
+                userCode(motor); 
+                if (!isInitial) logConsole('info', 'Cena recarregada com sucesso.'); 
+            } catch (e) { 
+                logConsole('error', `Erro ao executar script: ${e.message}`); 
+                console.error(e); 
+            } 
+            updateHierarchy(); 
+            updatePropertiesPanel(null); 
+            loadGraphicSettingsUI(); // Garante que as configurações de cena sejam aplicadas visualmente
+        }
+
+        function togglePlayStop() { isPlaying = !isPlaying; const icon = ui.btnToggleAnimation.querySelector('i'); const leftPanel = document.getElementById('left-panel'); const rightPanel = document.getElementById('right-panel'); 
+            if (isPlaying) { 
+                motor.play(); 
+                icon.classList.replace('fa-play', 'fa-stop'); 
+                ui.btnToggleAnimation.title = "Parar Simulação"; 
+                [leftPanel, rightPanel, ui.fileManagerPanel].forEach(p => {p.style.pointerEvents = "none"; p.style.opacity = "0.5";}); // Desabilita o gerenciador também
+            } else { 
+                motor.parar(); 
+                icon.classList.replace('fa-stop', 'fa-play'); 
+                ui.btnToggleAnimation.title = "Iniciar Simulação"; 
+                [leftPanel, rightPanel, ui.fileManagerPanel].forEach(p => {p.style.pointerEvents = "auto"; p.style.opacity = "1";}); // Reabilita o gerenciador também
+            } 
+        }
+        function adicionarNovoObjeto() {
+            const name = document.getElementById('modal-obj-name').value || 'novo_objeto';
+            const id = `${name.replace(/\s+/g, '_').toLowerCase()}_${Date.now()}`;
+            const type = document.getElementById('modal-obj-tipo').value;
+            const isLight = ['ambiente', 'direcional', 'ponto'].includes(type);
+
+            if (isLight) {
+                motor.adicionarLuz(id, name, { type: type, color: '#ffffff', intensity: 1 });
+            } else if (type === 'camera') { 
+                motor.adicionarObjeto(id, name, 'camera', { position: {x:0, y:5, z:15}, fov: 75, near: 0.1, far: 1000 });
+            }
+            else {
+                const bodyType = (type === 'plano') ? 'static' : 'dynamic';
+                const collisionShape = (type === 'plano') ? 'plane' : (type === 'esfera' ? 'sphere' : 'box'); 
+                motor.adicionarObjeto(id, name, type, { physics: { bodyType: bodyType, mass: 1, friction: 0.5, restitution: 0.5, collisionShape: collisionShape, linearDamping: 0.01, angularDamping: 0.01 } });
+            }
+            updateHierarchy();
+            selecionarObjeto(id);
+            toggleModal(ui.modalAddObject, false);
+        }
+        function gerarESetarScript() { const script = motor.gerarScriptDaCena(); aceEditor.setValue(script, -1); logConsole('info', 'Script da cena atual gerado no editor.'); toggleScriptEditor(true); }
+        
+        // NOVO: Função para Salvar o Projeto Completo como .js
+        function salvarProjetoCompleto() {
+            // Atualiza o conteúdo de 'cena.js' no fileSystem antes de salvar
+            fileSystem.assets.scripts['cena.js'] = {
+                type: 'script',
+                content: aceEditor.getValue(),
+                url: `data:application/javascript;base64,${btoa(encodeURIComponent(aceEditor.getValue()))}` // Cria Data URL para consistência
+            };
+
+            const projectJsString = motor.gerarDadosDoProjeto(
+                aceEditor.getValue(), 
+                fileSystem, 
+                motor.cena._backgroundConfig, 
+                motor.mundoFisica.gravity.toArray(),
+                motor.renderizador.shadowMap.enabled,
+                Object.keys(THREE).find(key => THREE[key] === motor.renderizador.shadowMap.type),
+                motor.renderizador.toneMapping !== THREE.NoToneMapping,
+                motor.renderizador.toneMappingExposure,
+                motor.renderizador.getPixelRatio(),
+                // Tenta obter o tamanho do mapa de sombras de uma luz direcional ativa
+                Object.values(motor.getObjetosNaCena()).find(o => o.threeObj.isDirectionalLight)?.threeObj?.shadow?.mapSize.width || 1024
+            );
+            
+            const blob = new Blob([projectJsString], { type: 'application/javascript;charset=utf-8' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `motor_monkey_project_${Date.now()}.js`; // Salva como .js
+            link.click();
+            URL.revokeObjectURL(link.href);
+            logConsole('info', 'Projeto completo salvo como arquivo JavaScript.');
+        }
+
+        // NOVO: Função para Carregar um Projeto Completo a partir de um .js
+        function carregarProjetoCompleto(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    // Cria um elemento script temporário para executar o JS do arquivo
+                    const scriptElement = document.createElement('script');
+                    // Usamos Blob URL para que o navegador execute o JS lido do arquivo
+                    const blob = new Blob([e.target.result], { type: 'application/javascript' });
+                    scriptElement.src = URL.createObjectURL(blob);
+                    
+                    scriptElement.onload = () => {
+                        if (window.motorMonkeyProjectData) {
+                            const loadedProject = window.motorMonkeyProjectData;
+
+                            // 1. Carregar o script da cena no Ace Editor
+                            if (loadedProject.sceneScript) {
+                                aceEditor.setValue(loadedProject.sceneScript, -1);
+                                logConsole('info', 'Script da cena carregado do projeto.');
+                            } else {
+                                logConsole('warning', 'Nenhum script de cena encontrado no projeto carregado.');
+                            }
+
+                            // 2. Carregar os arquivos no gerenciador de arquivos
+                            // Limpa o fileSystem atual antes de carregar o novo
+                            for (const key in fileSystem) { 
+                                if (fileSystem.hasOwnProperty(key)) {
+                                    delete fileSystem[key];
+                                }
+                            }
+                            // Copia a estrutura do sistema de arquivos carregado
+                            Object.assign(fileSystem, loadedProject.fileSystem || { 'assets': { 'textures': {}, 'scripts': {} } });
+                            currentPath = []; // Volta para a raiz
+                            renderFileTree();
+                            logConsole('info', 'Arquivos carregados no gerenciador.');
+
+                            // 3. Aplicar configurações de cena (gravidade, neblina, fundo, renderização)
+                            if (loadedProject.gravity) { 
+                                motor.configurarGravidade(...loadedProject.gravity);
+                            }
+                            if (loadedProject.fogConfig) { // Assumindo que a neblina também tem uma config separada
+                                motor.configurarNeblina(loadedProject.fogConfig);
+                            }
+                            if (loadedProject.backgroundConfig) { 
+                                // O environmentMap pode ser apenas o nome do arquivo aqui, MotorJM precisa carregá-lo do fileSystem
+                                const envMapFile = loadedProject.backgroundConfig.environmentMapName ? 
+                                    fileSystem.assets.textures[loadedProject.backgroundConfig.environmentMapName] : null;
+                                
+                                // Passamos o Data URL ou null, MotorJM.js vai lidar com isso
+                                motor.configurarFundoCena({ 
+                                    color: loadedProject.backgroundConfig.color, 
+                                    environmentMap: envMapFile ? envMapFile.url : null 
+                                });
+                            } else {
+                                motor.configurarFundoCena({ color: '#1a1a1a', environmentMap: null });
+                            }
+
+                            // Configurações de renderização
+                            if (loadedProject.renderSettings) {
+                                motor.aplicarConfiguracoesDeRenderizacao(loadedProject.renderSettings);
+                            }
+                            loadGraphicSettingsUI(); // Atualiza a UI das configurações
+
+                            // 4. Recarregar a cena (isso executa o script do editor com os arquivos carregados)
+                            recarregarCena(); 
+                            logConsole('info', 'Projeto carregado com sucesso!');
+                        } else {
+                            logConsole('error', 'O arquivo .js carregado não contém os dados do projeto Motor Monkey (window.motorMonkeyProjectData não encontrado).');
+                        }
+                        // Limpa o script e a URL temporária
+                        document.head.removeChild(scriptElement);
+                        URL.revokeObjectURL(scriptElement.src);
+                        delete window.motorMonkeyProjectData; // Limpa a variável global
+                    };
+
+                    scriptElement.onerror = () => {
+                        logConsole('error', 'Falha ao carregar o arquivo JS do projeto. Verifique o console para erros de sintaxe no arquivo carregado.');
+                        document.head.removeChild(scriptElement);
+                        URL.revokeObjectURL(scriptElement.src);
+                    };
+
+                    document.head.appendChild(scriptElement);
+
+                } catch (error) {
+                    logConsole('error', `Erro ao processar o arquivo de projeto: ${error.message}`);
+                    console.error('Erro ao carregar projeto:', error);
+                }
+            };
+            reader.readAsText(file);
+            // Limpa o input para permitir carregar o mesmo arquivo novamente
+            ui.loadProjectInput.value = ''; 
+        }
+
+        function updateUI() { const showPanels = window.innerWidth >= 768; document.getElementById('left-panel').style.display = showPanels ? 'flex' : 'none'; document.getElementById('right-panel').style.display = showPanels ? 'flex' : 'none'; }
+        function updateHierarchy() { 
+            ui.objectHierarchy.innerHTML = ''; 
+            const objects = motor.getObjetosNaCena(); 
+            Object.keys(objects).sort().forEach(id => { 
+                const obj = objects[id]; 
+                const li = document.createElement('li'); 
+                li.textContent = obj.name || id; 
+                li.dataset.id = id; 
+                let iconClass = 'fa-cube'; 
+                if (obj.type === 'esfera') iconClass = 'fa-globe'; 
+                if (obj.type.startsWith('luz')) iconClass = 'fa-lightbulb'; 
+                if (obj.type === 'plano') iconClass = 'fa-square-full'; 
+                if (obj.type === 'camera_jogo') iconClass = 'fa-video'; 
+                li.innerHTML = `<i class="fas ${iconClass}"></i> ${li.textContent}`; 
+                if (id === objetoSelecionadoId) { li.classList.add('selected'); } 
+                li.addEventListener('click', () => selecionarObjeto(id)); 
+                ui.objectHierarchy.appendChild(li); 
+            }); 
+        }
+        function selecionarObjeto(id) { if(isPlaying) return; objetoSelecionadoId = id; motor.selecionarObjeto(id); updateHierarchy(); updatePropertiesPanel(id); }
+
+        function updatePropertiesPanel(id) {
+            if (!id || !motor) {
+                ui.objectProperties.innerHTML = '<p>Selecione um objeto para ver suas propriedades.</p>';
+                return;
+            }
+            const obj = motor.getObjetosNaCena()[id];
+            if (!obj) return;
+
+            let html = `<h5>${obj.name || id}</h5>`;
+            const threeObj = obj.threeObj;
+
+            if (threeObj.position) {
+                const pos = threeObj.position;
+                const rot = threeObj.rotation;
+                html += `<div class="property-group"><h5>Transform</h5>
+                    <div class="prop-row"><span class="prop-label">P</span>
+                        <input type="number" step="0.1" value="${pos.x.toFixed(2)}" data-prop="position.x" data-type="float">
+                        <input type="number" step="0.1" value="${pos.y.toFixed(2)}" data-prop="position.y" data-type="float">
+                        <input type="number" step="0.1" value="${pos.z.toFixed(2)}" data-prop="position.z" data-type="float">
+                    </div>
+                    <div class="prop-row"><span class="prop-label">R</span>
+                        <input type="number" step="1" value="${(rot.x * 180 / Math.PI).toFixed(1)}" data-prop="rotation.x" data-type="degrees">
+                        <input type="number" step="1" value="${(rot.y * 180 / Math.PI).toFixed(1)}" data-prop="rotation.y" data-type="degrees">
+                        <input type="number" step="1" value="${(rot.z * 180 / Math.PI).toFixed(1)}" data-prop="rotation.z" data-type="degrees">
+                    </div>
+                </div>`;
+            }
+
+            // PROPRIEDADES DA CÂMERA DE JOGO
+            if (obj.type === 'camera_jogo') {
+                html += `<div class="property-group"><h5>Câmera de Jogo</h5>
+                    <label>FOV: <span class="range-value">${obj.threeObj.fov.toFixed(1)}</span></label>
+                    <input type="range" min="30" max="120" step="1" value="${obj.threeObj.fov}" data-prop="fov" data-type="float">
+                    <label>Near: <input type="number" step="0.1" value="${obj.threeObj.near.toFixed(2)}" data-prop="near" data-type="float"></label>
+                    <label>Far: <input type="number" step="1" value="${obj.threeObj.far.toFixed(2)}" data-prop="far" data-type="float"></label>
+                </div>`;
+            }
+
+            if (obj.type.startsWith('luz_')) {
+                 html += `<div class="property-group"><h5>Luz</h5>
+                    <label>Cor</label>
+                    <input type="color" value="#${threeObj.color.getHexString()}" data-prop="color">
+                    <label>Intensidade: <span class="range-value">${(threeObj.intensity).toFixed(2)}</span></label>
+                    <input type="range" min="0" max="5" step="0.05" value="${threeObj.intensity}" data-prop="intensity" data-type="float">
+                </div>`;
+            }
+
+            if (threeObj.isMesh && threeObj.material) {
+                const mat = threeObj.material;
+                const getTexName = (tex) => tex ? tex.name || 'arquivo_local.png' : 'Nenhuma';
+                html += `<div class="property-group"><h5>Material (PBR)</h5>
+                    <label>Albedo (Cor)</label>
+                    <input type="color" value="#${mat.color.getHexString()}" data-prop="material.color">
+                    <div class="texture-input-row">
+                        <input type="text" readonly value="${getTexName(mat.map)}" title="${getTexName(mat.map)}">
+                        <input type="file" id="tex-albedo-${id}" accept="image/*" style="display:none" data-map-type="map">
+                        <button class="btn-load-texture" data-target-file-input="tex-albedo-${id}">Carregar</button>
+                    </div>
+                    <label>Metalness: <span class="range-value">${(mat.metalness).toFixed(2)}</span></label>
+                    <input type="range" min="0" max="1" step="0.01" value="${mat.metalness}" data-prop="material.metalness" data-type="float">
+                    <label>Roughness: <span class="range-value">${(mat.roughness).toFixed(2)}</span></label>
+                    <input type="range" min="0" max="1" step="0.01" value="${mat.roughness}" data-prop="material.roughness" data-type="float">
+                </div>`;
+            }
+
+            // Grupo de propriedades da Física
+            if (obj.physicsProperties) { 
+                const physicsProps = obj.physicsProperties;
+                const bodyType = physicsProps.bodyType;
+                const mass = physicsProps.mass;
+                const friction = physicsProps.friction;
+                const restitution = physicsProps.restitution;
+                const collisionShape = physicsProps.collisionShape || (obj.type === 'caixa' ? 'box' : (obj.type === 'esfera' ? 'sphere' : 'plane')); 
+                const linearDamping = physicsProps.linearDamping ?? 0.01; 
+                const angularDamping = physicsProps.angularDamping ?? 0.01; 
+
+                const isDynamic = bodyType === 'dynamic';
+                const isStatic = bodyType === 'static';
+                const isNone = bodyType === 'none';
+
+                html += `<div class="property-group"><h5>Física</h5>
+                    <label>Tipo de Corpo:</label>
+                    <div>
+                        <label><input type="radio" name="physics-body-type-${id}" value="dynamic" ${isDynamic ? 'checked' : ''} data-prop="physics.bodyType"> Dinâmico</label>
+                        <label><input type="radio" name="physics-body-type-${id}" value="static" ${isStatic ? 'checked' : ''} data-prop="physics.bodyType"> Estático</label>
+                        <label><input type="radio" name="physics-body-type-${id}" value="none" ${isNone ? 'checked' : ''} data-prop="physics.bodyType"> Nenhum</label>
+                    </div>
+                    <div id="physics-options-${id}" style="display:${isNone ? 'none' : 'block'};">
+                        <label>Forma de Colisão:</label>
+                        <select id="collision-shape-${id}" data-prop="physics.collisionShape" ${isNone ? 'disabled' : ''}>
+                            <option value="box" ${collisionShape === 'box' ? 'selected' : ''}>Caixa</option>
+                            <option value="sphere" ${collisionShape === 'sphere' ? 'selected' : ''}>Esfera</option>
+                            <option value="plane" ${collisionShape === 'plane' ? 'selected' : ''}>Plano</option>
+                        </select>
+                        <label>Massa: <input type="number" step="0.1" value="${mass}" data-prop="physics.mass" data-type="float" ${isDynamic ? '' : 'disabled'}></label>
+                        <label>Fricção: <span class="range-value">${friction.toFixed(2)}</span></label>
+                        <input type="range" min="0" max="1" step="0.01" value="${friction}" data-prop="physics.friction" data-type="float" ${isNone ? 'disabled' : ''}>
+                        <label>Restituição (Quique): <span class="range-value">${restitution.toFixed(2)}</span></label>
+                        <input type="range" min="0" max="1" step="0.01" value="${restitution}" data-prop="physics.restitution" data-type="float" ${isNone ? 'disabled' : ''}>
+                        <label>Atrito Linear (Ar): <span class="range-value">${linearDamping.toFixed(2)}</span></label>
+                        <input type="range" min="0" max="1" step="0.01" value="${linearDamping}" data-prop="physics.linearDamping" data-type="float" ${isNone ? 'disabled' : ''}>
+                        <label>Atrito Angular (Ar): <span class="range-value">${angularDamping.toFixed(2)}</span></label>
+                        <input type="range" min="0" max="1" step="0.01" value="${angularDamping}" data-prop="physics.angularDamping" data-type="float" ${isNone ? 'disabled' : ''}>
+                    </div>
+                </div>`;
+            }
+            
+            html += `<button id="btn-delete-object" style="background-color:#dc3545; color:white; width:100%; padding:8px; border:none; border-radius:4px; cursor:pointer;">Remover Objeto</button>`;
+            
+            ui.objectProperties.innerHTML = html;
+            addPropertyListeners(id); 
+        }
+
+        function addPropertyListeners(id) {
+            const container = ui.objectProperties;
+
+            container.querySelectorAll('input[data-prop]:not([type="radio"]), select[data-prop]').forEach(input => {
+                input.addEventListener('input', (e) => { 
+                    const prop = e.target.dataset.prop;
+                    let value;
+
+                    if (e.target.type === 'checkbox') {
+                        value = e.target.checked;
+                    } else if (e.target.dataset.type === 'float') {
+                        value = parseFloat(e.target.value);
+                    } else if (e.target.dataset.type === 'degrees') {
+                        value = parseFloat(e.target.value) * Math.PI / 180;
+                    } else {
+                        value = e.target.value; 
+                    }
+                    motor.atualizarPropriedadeObjeto(id, prop, value);
+
+                    if (e.target.type === 'range') {
+                        const label = e.target.previousElementSibling;
+                        if(label && label.querySelector('.range-value')) {
+                            label.querySelector('.range-value').textContent = parseFloat(e.target.value).toFixed(2);
+                        }
+                    }
+                });
+                if (input.tagName === 'SELECT') {
+                    input.addEventListener('change', (e) => {
+                        motor.atualizarPropriedadeObjeto(id, e.target.dataset.prop, e.target.value);
+                    });
+                }
+            });
+
+            container.querySelectorAll(`input[name="physics-body-type-${id}"]`).forEach(radio => {
+                radio.addEventListener('change', (e) => {
+                    const newBodyType = e.target.value;
+                    motor.atualizarPropriedadeObjeto(id, 'physics.bodyType', newBodyType);
+
+                    const physicsOptionsDiv = document.getElementById(`physics-options-${id}`);
+                    const massInput = physicsOptionsDiv?.querySelector('input[data-prop="physics.mass"]');
+                    const frictionInput = physicsOptionsDiv?.querySelector('input[data-prop="physics.friction"]');
+                    const restitutionInput = physicsOptionsDiv?.querySelector('input[data-prop="physics.restitution"]');
+                    const collisionShapeSelect = physicsOptionsDiv?.querySelector('select[data-prop="physics.collisionShape"]');
+                    const linearDampingInput = physicsOptionsDiv?.querySelector('input[data-prop="physics.linearDamping"]');
+                    const angularDampingInput = physicsOptionsDiv?.querySelector('input[data-prop="physics.angularDamping"]');
+
+                    if (newBodyType === 'none') {
+                        physicsOptionsDiv.style.display = 'none';
+                        if (massInput) massInput.disabled = true;
+                        if (frictionInput) frictionInput.disabled = true;
+                        if (restitutionInput) restitutionInput.disabled = true;
+                        if (collisionShapeSelect) collisionShapeSelect.disabled = true;
+                        if (linearDampingInput) linearDampingInput.disabled = true;
+                        if (angularDampingInput) angularDampingInput.disabled = true;
+                    } else {
+                        physicsOptionsDiv.style.display = 'block';
+                        if (frictionInput) frictionInput.disabled = false;
+                        if (restitutionInput) restitutionInput.disabled = false;
+                        if (collisionShapeSelect) collisionShapeSelect.disabled = false;
+                        if (linearDampingInput) linearDampingInput.disabled = false;
+                        if (angularDampingInput) angularDampingInput.disabled = false;
+                        
+                        if (newBodyType === 'static') {
+                            if (massInput) {
+                                massInput.value = 0; 
+                                massInput.disabled = true;
+                            }
+                        } else { 
+                            if (massInput) {
+                                massInput.disabled = false;
+                                if (parseFloat(massInput.value) === 0) massInput.value = 1;
+                            }
+                        }
+                    }
+                });
+            });
+
+
+            container.querySelectorAll('.btn-load-texture').forEach(button => {
+                button.addEventListener('click', (e) => { document.getElementById(e.target.dataset.targetFileInput).click(); });
+            });
+            container.querySelectorAll('input[type="file"][data-map-type]').forEach(fileInput => {
+                fileInput.addEventListener('change', (e) => {
+                    const file = e.target.files[0];
+                    if (!file) return;
+                    const mapType = e.target.dataset.mapType;
+                    // Ao carregar textura local, use Data URL para que seja serializável no projeto
+                    const reader = new FileReader();
+                    reader.onload = (readEvent) => {
+                        const dataUrl = readEvent.target.result;
+                        motor.atualizarPropriedadeObjeto(id, `material.${mapType}`, { url: dataUrl, name: file.name });
+                        logConsole('info', `Carregando textura '${file.name}' para ${mapType}.`);
+                        e.target.parentElement.querySelector('input[type="text"]').value = file.name;
+                        
+                        // NOVO: Adiciona a textura ao gerenciador de arquivos
+                        const texturesFolder = getFolder(['assets', 'textures']);
+                        if (texturesFolder && !texturesFolder[file.name]) {
+                            texturesFolder[file.name] = {
+                                type: 'image',
+                                url: dataUrl,
+                                content: null // Não armazena conteúdo binário diretamente
+                            };
+                            renderFileTree();
+                            logConsole('info', `Textura '${file.name}' adicionada ao gerenciador de arquivos.`);
+                        }
+                    };
+                    reader.readAsDataURL(file);
+                });
+            });
+            document.getElementById('btn-delete-object')?.addEventListener('click', () => { motor.removerObjeto(id); updateHierarchy(); updatePropertiesPanel(null); });
+        }
+        
+        // --- Funções de Configuração Gráfica na UI ---
+
+        function loadGraphicSettingsUI() {
+            const renderer = motor.renderizador;
+            const currentLight = Object.values(motor.getObjetosNaCena()).find(o => o.threeObj.isDirectionalLight)?.threeObj;
+            const currentShadowMapSize = currentLight?.shadow?.mapSize.width || 1024;
+
+            ui.settingsShadowsEnabled.checked = renderer.shadowMap.enabled;
+            ui.settingsShadowsType.value = Object.keys(THREE).find(key => THREE[key] === renderer.shadowMap.type) || 'PCFSoftShadowMap';
+            ui.settingsShadowMapSize.value = currentShadowMapSize;
+
+            ui.settingsToneMappingEnabled.checked = renderer.toneMapping !== THREE.NoToneMapping;
+            ui.settingsToneMappingExposure.value = renderer.toneMappingExposure.toFixed(2);
+
+            ui.settingsPixelRatio.value = renderer.getPixelRatio().toFixed(2);
+            ui.pixelRatioValue.textContent = renderer.getPixelRatio().toFixed(2);
+
+            ui.settingsShadowsOptions.style.display = ui.settingsShadowsEnabled.checked ? 'block' : 'none';
+            ui.settingsToneMappingOptions.style.display = ui.settingsToneMappingEnabled.checked ? 'block' : 'none';
+
+            // Carregar configurações de Background
+            ui.settingsBackgroundColor.value = `#${motor.cena.background?.getHexString() || '1a1a1a'}`;
+            ui.settingsEnvironmentMapName.value = motor.cena._backgroundConfig.environmentMapName || 'Nenhuma';
+        }
+
+        function applyGraphicSettings() {
+            const settings = {
+                sombrasHabilitadas: ui.settingsShadowsEnabled.checked,
+                tipoSombra: ui.settingsShadowsType.value,
+                toneMappingHabilitado: ui.settingsToneMappingEnabled.checked,
+                exposicaoToneMapping: parseFloat(ui.settingsToneMappingExposure.value),
+                pixelRatio: parseFloat(ui.settingsPixelRatio.value),
+                shadowMapSize: parseInt(ui.settingsShadowMapSize.value)
+            };
+            motor.aplicarConfiguracoesDeRenderizacao(settings);
+            
+            // Aplicar configurações de Fundo da Cena
+            const backgroundSettings = {
+                color: ui.settingsBackgroundColor.value,
+                // Passa o File object ou null
+                environmentMap: ui.settingsEnvironmentMapFile.files[0] || null 
+            };
+            motor.configurarFundoCena(backgroundSettings);
+
+            logConsole('info', 'Configurações de renderização aplicadas.');
+        }
+
+        // --- Gerenciador de Arquivos Lógica ---
+
+        function getFolder(path) {
+            let currentFolder = fileSystem;
+            for (const p of path) {
+                if (!currentFolder[p] || typeof currentFolder[p] !== 'object' || currentFolder[p].type) {
+                    return null; // Caminho inválido ou é um arquivo
+                }
+                currentFolder = currentFolder[p];
+            }
+            return currentFolder;
+        }
+
+        function renderFileTree() {
+            ui.fileTree.innerHTML = '';
+            const currentFolder = getFolder(currentPath);
+            ui.filePathDisplay.textContent = '/' + currentPath.join('/');
+
+            if (!currentFolder) {
+                logConsole('error', 'Caminho do gerenciador de arquivos inválido. Resetando para a raiz.');
+                currentPath = [];
+                renderFileTree();
+                return;
+            }
+
+            const folders = [];
+            const files = [];
+
+            for (const name in currentFolder) {
+                if (currentFolder[name] && currentFolder[name].type) { // É um arquivo
+                    files.push({ name, data: currentFolder[name] });
+                } else { // É uma pasta
+                    folders.push({ name, data: currentFolder[name] });
+                }
+            }
+
+            // Ordena pastas e arquivos
+            folders.sort((a, b) => a.name.localeCompare(b.name));
+            files.sort((a, b) => a.name.localeCompare(b.name));
+
+            folders.forEach(item => {
+                const li = document.createElement('li');
+                li.innerHTML = `<i class="fas fa-folder"></i> ${item.name}`;
+                li.dataset.name = item.name;
+                li.dataset.type = 'folder';
+                li.addEventListener('click', () => {
+                    currentPath.push(item.name);
+                    renderFileTree();
+                    selectedFileElement = null; // Limpa seleção ao mudar de pasta
+                });
+                li.addEventListener('contextmenu', (e) => showFileContextMenu(e, item.name, 'folder'));
+                ui.fileTree.appendChild(li);
+            });
+
+            files.forEach(item => {
+                const li = document.createElement('li');
+                let iconClass = 'fa-file-alt'; // Default
+                if (item.name.match(/\.(png|jpg|jpeg|gif|hdr)$/i)) iconClass = 'fa-file-image';
+                else if (item.name.match(/\.js$/i)) iconClass = 'fa-file-code';
+
+                li.innerHTML = `<i class="fas ${iconClass}"></i> ${item.name}`;
+                li.dataset.name = item.name;
+                li.dataset.type = item.data.type; // 'image', 'script'
+                li.dataset.url = item.data.url; // Armazena a URL para uso posterior
+
+                li.addEventListener('click', (e) => {
+                    if (selectedFileElement) {
+                        selectedFileElement.classList.remove('selected-file');
+                    }
+                    selectedFileElement = li;
+                    li.classList.add('selected-file');
+                });
+                li.addEventListener('contextmenu', (e) => showFileContextMenu(e, item.name, item.data.type, item.data.url));
+                ui.fileTree.appendChild(li);
+            });
+
+            // Gerencia o botão "Voltar"
+            ui.btnBackFolder.disabled = currentPath.length === 0;
+            // Gerencia o botão "Excluir" e "Renomear" (habilitado apenas se um arquivo/pasta for selecionado)
+            // Esses botões devem ser habilitados/desabilitados pelo clique no item ou no próprio botão
+            ui.btnDeleteFile.disabled = !selectedFileElement;
+            ui.btnRenameFile.disabled = !selectedFileElement;
+        }
+
+        function showFileContextMenu(event, name, type, url = null) {
+            event.preventDefault(); 
+
+            if (selectedFileElement) {
+                selectedFileElement.classList.remove('selected-file');
+            }
+            selectedFileElement = event.currentTarget;
+            selectedFileElement.classList.add('selected-file');
+
+            ui.ctxApplyTexture.style.display = 'none';
+            ui.ctxLoadScript.style.display = 'none';
+
+            if (type === 'image' && objetoSelecionadoId && motor.getObjetosNaCena()[objetoSelecionadoId]?.threeObj?.isMesh) {
+                ui.ctxApplyTexture.style.display = 'block';
+            }
+            if (type === 'script') {
+                ui.ctxLoadScript.style.display = 'block';
+            }
+
+            ui.fileContextMenu.style.left = `${event.clientX}px`;
+            ui.fileContextMenu.style.top = `${event.clientY}px`;
+            ui.fileContextMenu.style.display = 'block';
+
+            ui.fileContextMenu.dataset.fileName = name;
+            ui.fileContextMenu.dataset.fileType = type;
+            ui.fileContextMenu.dataset.fileUrl = url;
+
+            document.addEventListener('click', hideFileContextMenu, { once: true });
+        }
+
+        function hideFileContextMenu() {
+            ui.fileContextMenu.style.display = 'none';
+            if (selectedFileElement) {
+                selectedFileElement.classList.remove('selected-file');
+                selectedFileElement = null;
+            }
+            // Re-renderiza a árvore para atualizar o estado dos botões Excluir/Renomear
+            renderFileTree(); 
+        }
+
+        function handleNewFolder() {
+            const folderName = prompt('Nome da nova pasta:');
+            if (folderName && !folderName.includes('/') && !folderName.includes('\\')) { 
+                const currentFolder = getFolder(currentPath);
+                if (currentFolder && !currentFolder[folderName]) {
+                    currentFolder[folderName] = {}; 
+                    renderFileTree();
+                    logConsole('info', `Pasta '${folderName}' criada.`);
+                } else {
+                    logConsole('warning', `Pasta '${folderName}' já existe ou nome inválido.`);
+                }
+            } else if (folderName) {
+                logConsole('warning', 'Nome da pasta contém caracteres inválidos.');
+            }
+        }
+
+        function handleUploadFile(event) {
+            const files = event.target.files;
+            if (files.length === 0) return;
+
+            const currentFolder = getFolder(currentPath);
+            if (!currentFolder) {
+                logConsole('error', 'Caminho inválido para upload.');
+                return;
+            }
+
+            Array.from(files).forEach(file => { 
+                if (currentFolder[file.name]) {
+                    logConsole('warning', `Arquivo '${file.name}' já existe. Ignorando.`);
+                    return;
+                }
+
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const fileContent = e.target.result;
+                    const fileType = file.type.startsWith('image/') || file.name.endsWith('.hdr') ? 'image' : (file.name.endsWith('.js') ? 'script' : 'other');
+
+                    currentFolder[file.name] = {
+                        type: fileType,
+                        url: fileContent, 
+                        content: fileType === 'script' ? fileContent : null 
+                    };
+                    renderFileTree();
+                    logConsole('info', `Arquivo '${file.name}' (${fileType}) carregado.`);
+                };
+                if (file.type.startsWith('image/') || file.name.endsWith('.hdr')) {
+                    reader.readAsDataURL(file); 
+                } else if (file.name.endsWith('.js')) {
+                    reader.readAsText(file); 
+                } else {
+                    logConsole('warning', `Tipo de arquivo '${file.name}' não suportado para upload direto no gerenciador. Pode ser salvo, mas talvez não aplicável.`);
+                    currentFolder[file.name] = {
+                        type: 'other',
+                        url: null, 
+                        content: null 
+                    };
+                    renderFileTree();
+                }
+            });
+            ui.fileUploadInput.value = ''; 
+        }
+
+        function handleDeleteFile() {
+            if (!selectedFileElement) {
+                logConsole('warning', 'Nenhum item selecionado para excluir.');
+                return;
+            }
+            const nameToDelete = selectedFileElement.dataset.name;
+            const typeToDelete = selectedFileElement.dataset.type;
+
+            let parentFolder = fileSystem;
+            for (let i = 0; i < currentPath.length; i++) {
+                parentFolder = parentFolder[currentPath[i]];
+            }
+
+            if (confirm(`Tem certeza que deseja excluir '${nameToDelete}'?`)) {
+                if (parentFolder && parentFolder[nameToDelete]) {
+                    if (typeToDelete === 'folder' && Object.keys(parentFolder[nameToDelete]).length > 0) {
+                        logConsole('error', `Pasta '${nameToDelete}' não está vazia. Exclua o conteúdo primeiro.`);
+                        return;
+                    }
+                    delete parentFolder[nameToDelete];
+                    renderFileTree();
+                    logConsole('info', `'${nameToDelete}' excluído.`);
+                } else {
+                    logConsole('error', `Erro ao excluir '${nameToDelete}'. Item não encontrado.`);
+                }
+            }
+        }
+
+        function handleRenameFile() {
+            if (!selectedFileElement) {
+                logConsole('warning', 'Nenhum item selecionado para renomear.');
+                return;
+            }
+            const oldName = selectedFileElement.dataset.name;
+            const newName = prompt(`Renomear '${oldName}' para:`);
+            if (newName && newName.trim() !== '' && newName !== oldName && !newName.includes('/') && !newName.includes('\\')) {
+                const currentFolder = getFolder(currentPath);
+                if (currentFolder && currentFolder[oldName] && !currentFolder[newName]) {
+                    currentFolder[newName] = currentFolder[oldName];
+                    delete currentFolder[oldName];
+                    renderFileTree();
+                    logConsole('info', `'${oldName}' renomeado para '${newName}'.`);
+                } else {
+                    logConsole('error', `Erro ao renomear '${oldName}'. Nome já existe ou inválido.`);
+                }
+            } else if (newName) { 
+                logConsole('warning', 'Nome inválido para renomear (vazio, igual ao antigo, ou contém caracteres inválidos).');
+            }
+        }
+
+        // --- Aplicação de Arquivos ---
+        function applyTextureFromFileManager() {
+            if (!objetoSelecionadoId) {
+                logConsole('warning', 'Selecione um objeto 3D antes de aplicar uma textura.');
+                return;
+            }
+            if (!selectedFileElement || selectedFileElement.dataset.type !== 'image') {
+                logConsole('warning', 'Selecione um arquivo de imagem para aplicar como textura.');
+                return;
+            }
+
+            const fileUrl = selectedFileElement.dataset.url; 
+            const fileName = selectedFileElement.dataset.name;
+            motor.atualizarPropriedadeObjeto(objetoSelecionadoId, 'material.map', { url: fileUrl, name: fileName });
+            logConsole('info', `Textura '${fileName}' aplicada ao objeto selecionado.`);
+            hideFileContextMenu();
+        }
+
+        function loadScriptFromFileManager() {
+            if (!selectedFileElement || selectedFileElement.dataset.type !== 'script') {
+                logConsole('warning', 'Selecione um arquivo JavaScript para carregar como script.');
+                return;
+            }
+            const scriptName = selectedFileElement.dataset.name;
+            const currentFolder = getFolder(currentPath);
+            const scriptData = currentFolder ? currentFolder[scriptName] : null;
+            
+            if (scriptData && scriptData.content) {
+                try {
+                    motor.executeScript(scriptData.content, scriptName); 
+                    logConsole('info', `Script '${scriptName}' carregado e executado com sucesso.`);
+                } catch (e) {
+                    logConsole('error', `Erro ao executar script '${scriptName}': ${e.message}`);
+                    console.error(e);
+                }
+            } else {
+                logConsole('error', `Não foi possível carregar o conteúdo do script '${scriptName}'.`);
+            }
+            hideFileContextMenu();
+        }
+
+        // --- Event Listeners Principais e Modais ---
+        function setupEventListeners() {
+            ui.btnToggleAnimation.onclick = togglePlayStop;
+            ui.btnToggleConsole.onclick = () => ui.bottomPanel.classList.toggle('hidden');
+            ui.btnAddObject.onclick = () => toggleModal(ui.modalAddObject, true);
+            
+            ui.btnOpenSettings.onclick = () => {
+                loadGraphicSettingsUI();
+                toggleModal(ui.modalSettings, true);
+            };
+            ui.btnToggleScriptEditor.onclick = () => toggleScriptEditor(true);
+            ui.btnRecompileScript.onclick = () => recarregarCena();
+            ui.btnGenerateScript.onclick = gerarESetarScript;
+            
+            // NOVO: Event Listeners para Salvar/Carregar Projeto
+            ui.btnSaveProject.onclick = salvarProjetoCompleto;
+            ui.btnLoadProject.onclick = () => ui.loadProjectInput.click();
+            ui.loadProjectInput.onchange = carregarProjetoCompleto;
+
+            ui.btnModoTranslate.onclick = () => setTransformMode('translate');
+            ui.btnModoRotate.onclick = () => setTransformMode('rotate');
+            ui.btnModoScale.onclick = () => setTransformMode('scale');
+            ui.btnCloseScriptEditor.onclick = () => toggleScriptEditor(false);
+            document.getElementById('btn-copy-code').onclick = () => { navigator.clipboard.writeText(aceEditor.getValue()); logConsole('info', 'Código copiado.'); };
+            document.getElementById('btn-cancelar-modal').onclick = () => toggleModal(ui.modalAddObject, false);
+            ui.btnAdicionarModal.onclick = adicionarNovoObjeto;
+            
+            document.getElementById('settings-fog-enabled').onchange = (e) => { document.getElementById('settings-fog-options').style.display = e.target.checked ? 'block' : 'none'; };
+            document.getElementById('btn-cancelar-settings').onclick = () => toggleModal(ui.modalSettings, false);
+            ui.btnSaveSettings.onclick = () => {
+                motor.configurarNeblina({ enabled: document.getElementById('settings-fog-enabled').checked, color: document.getElementById('settings-fog-color').value, near: parseFloat(document.getElementById('settings-fog-near').value), far: parseFloat(document.getElementById('settings-fog-far').value) });
+                motor.configurarGravidade(parseFloat(document.getElementById('settings-gravity-x').value), parseFloat(document.getElementById('settings-gravity-y').value), parseFloat(document.getElementById('settings-gravity-z').value));
+                applyGraphicSettings();
+                toggleModal(ui.modalSettings, false);
+            };
+            window.onresize = updateUI;
+            window.addEventListener('objetoSelecionado', (e) => selecionarObjeto(e.detail.id));
+            window.addEventListener('objetoDesselecionado', () => { objetoSelecionadoId = null; updateHierarchy(); updatePropertiesPanel(null); });
+            window.addEventListener('keydown', (e) => { if (!isPlaying && objetoSelecionadoId) { if (e.key.toLowerCase() === 't') setTransformMode('translate'); if (e.key.toLowerCase() === 'r') setTransformMode('rotate'); if (e.key.toLowerCase() === 's') setTransformMode('scale'); } });
+        
+            // Listeners para os controles do console
+            document.querySelectorAll('.btn-filter').forEach(btn => btn.addEventListener('click', (e) => updateConsoleFilter(e.currentTarget.dataset.filter)));
+            document.getElementById('btn-copy-console').onclick = copyConsoleOutput;
+            document.getElementById('btn-clear-console').onclick = () => ui.consoleOutput.innerHTML = '';
+            document.getElementById('btn-fechar-console').onclick = () => ui.bottomPanel.classList.add('hidden');
+
+            // Listeners para as novas opções gráficas
+            ui.settingsQualityPreset.addEventListener('change', (e) => {
+                const preset = e.target.value;
+                const appliedSettings = motor.aplicarPresetQualidade(preset);
+                ui.settingsShadowsEnabled.checked = appliedSettings.sombrasHabilitadas;
+                ui.settingsShadowsType.value = appliedSettings.tipoSombra;
+                ui.settingsShadowMapSize.value = appliedSettings.shadowMapSize;
+                ui.settingsToneMappingEnabled.checked = appliedSettings.toneMappingHabilitado;
+                ui.settingsToneMappingExposure.value = appliedSettings.exposicaoToneMapping;
+                ui.settingsPixelRatio.value = appliedSettings.pixelRatio;
+                ui.pixelRatioValue.textContent = appliedSettings.pixelRatio.toFixed(2);
+
+                ui.settingsShadowsOptions.style.display = ui.settingsShadowsEnabled.checked ? 'block' : 'none';
+                ui.settingsToneMappingOptions.style.display = ui.settingsToneMappingEnabled.checked ? 'block' : 'none';
+            });
+
+            ui.settingsShadowsEnabled.addEventListener('change', (e) => {
+                ui.settingsShadowsOptions.style.display = e.target.checked ? 'block' : 'none';
+            });
+            ui.settingsToneMappingEnabled.addEventListener('change', (e) => {
+                ui.settingsToneMappingOptions.style.display = e.target.checked ? 'block' : 'none';
+            });
+            ui.settingsPixelRatio.addEventListener('input', (e) => {
+                ui.pixelRatioValue.textContent = parseFloat(e.target.value).toFixed(2);
+            });
+
+            // Listeners para o Gerenciador de Arquivos
+            ui.btnToggleFileManager.onclick = () => ui.fileManagerPanel.classList.toggle('visivel');
+            ui.btnNewFolder.onclick = handleNewFolder;
+            ui.btnUploadFile.onclick = () => ui.fileUploadInput.click(); 
+            ui.fileUploadInput.onchange = handleUploadFile;
+            ui.btnDeleteFile.onclick = handleDeleteFile;
+            ui.btnRenameFile.onclick = handleRenameFile;
+            ui.btnBackFolder.onclick = () => { if (currentPath.length > 0) { currentPath.pop(); renderFileTree(); } };
+
+            // Listeners para o Context Menu
+            ui.ctxApplyTexture.onclick = applyTextureFromFileManager;
+            ui.ctxLoadScript.onclick = loadScriptFromFileManager;
+            ui.ctxRenameFile.onclick = () => { handleRenameFile(); hideFileContextMenu(); };
+            ui.ctxDeleteFile.onclick = () => { handleDeleteFile(); hideFileContextMenu(); };
+
+            // Listeners para configurações de Background
+            ui.settingsBackgroundColor.addEventListener('input', (e) => {
+                motor.configurarFundoCena({ color: e.target.value });
+            });
+            ui.btnLoadEnvironmentMap.onclick = () => ui.settingsEnvironmentMapFile.click();
+            ui.settingsEnvironmentMapFile.onchange = (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    ui.settingsEnvironmentMapName.value = file.name;
+                    logConsole('info', `Imagem ambiente '${file.name}' selecionada. Clique em Aplicar para carregar.`);
+                } else {
+                    ui.settingsEnvironmentMapName.value = 'Nenhuma';
+                }
+            };
+            ui.btnClearEnvironmentMap.onclick = () => {
+                ui.settingsEnvironmentMapName.value = 'Nenhuma';
+                ui.settingsEnvironmentMapFile.value = ''; 
+                motor.configurarFundoCena({ environmentMap: null });
+                logConsole('info', 'Imagem ambiente removida.');
+            };
+        }
+        
+        function toggleModal(modal, show) { modal.classList.toggle('visivel', show); }
+        function toggleScriptEditor(show) { ui.codigoEditorContainer.classList.toggle('visivel', show); }
+        function setTransformMode(mode) { motor.getControlesTransform().setMode(mode); ['btn-modo-translate', 'btn-modo-rotate', 'btn-modo-scale'].forEach(id => document.getElementById(id).classList.remove('ativo')); document.getElementById(`btn-modo-${mode}`).classList.add('ativo'); }
+
+        init();
+    });
+    </script>
+</body>
+</html>
