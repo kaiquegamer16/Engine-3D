@@ -1,27 +1,30 @@
 
+
 class MotorJM {
     /**
      * Construtor da classe MotorJM.
      * @param {string} containerId - O ID do elemento HTML onde o canvas do renderizador será anexado.
-     * @param {object} [opcoes] - Opções de configuração inicial para o motor.
+     * @param {object} fileSystemReference - Uma referência ao objeto `fileSystem` da UI.
      */
-    constructor(containerId, opcoes = {}) {
+    constructor(containerId, fileSystemReference) { 
         this.container = document.getElementById(containerId);
         if (!this.container) {
-            console.error(`MotorJM (Erro Fatal): O elemento com o ID '${containerId}' não foi encontrado. O motor não pode ser inicializado sem um container válido.`);
-            return; // Impede que o motor continue a inicialização se o container não existe
+            console.error(`MotorJM (Erro Fatal): O elemento com o ID '${containerId}' não foi encontrado.`);
+            return; 
         }
+        
+        this.fileSystemReference = fileSystemReference; // Armazena a referência
 
         // --- Componentes Principais ---
         this.cena = new THREE.Scene();
-        this.renderizador = new THREE.WebGLRenderer({ antialias: true }); // Antialiasing inicial
-        this.textureLoader = new THREE.TextureLoader(); // Carregador de texturas
-        this.rgbeLoader = new THREE.RGBELoader(); // NOVO: Carregador para arquivos HDR
+        this.renderizador = new THREE.WebGLRenderer({ antialias: true }); 
+        this.textureLoader = new THREE.TextureLoader(); 
+        this.rgbeLoader = new THREE.RGBELoader(); 
 
         // --- Câmeras ---
-        this.editorCamera = null; // A câmera usada no modo de edição (OrbitControls)
-        this.activeCamera = null; // A câmera atualmente sendo usada para renderizar (editor ou jogo)
-        this.tempEditorCameraTarget = new THREE.Vector3(); // Para guardar o target do OrbitControls ao entrar no play
+        this.editorCamera = null; 
+        this.activeCamera = null; 
+        this.tempEditorCameraTarget = new THREE.Vector3(); 
 
         // --- Controles e Interação ---
         this.controlesOrbit = null;
@@ -31,25 +34,23 @@ class MotorJM {
         this.objetoSelecionadoId = null;
         
         // --- Propriedades de Cena ---
-        // NOVO: rastreia as configurações de fundo para o script gerado
         this.cena._backgroundConfig = { color: '#1a1a1a', environmentMapName: 'Nenhuma' }; 
 
         // --- Física ---
         this.mundoFisica = new CANNON.World();
-        this.mundoFisica.solver.iterations = opcoes.solverIterations || 10; // Maior estabilidade na simulação
-        this.mundoFisica.defaultContactMaterial.contactEquationStiffness = 1e9; // Reduz penetração entre corpos
-        this.mundoFisica.defaultContactMaterial.contactEquationRelaxation = 4; // Contatos mais suaves
+        this.mundoFisica.solver.iterations = 10;
+        this.mundoFisica.defaultContactMaterial.contactEquationStiffness = 1e9;
+        this.mundoFisica.defaultContactMaterial.contactEquationRelaxation = 4;
 
         // --- Estado Interno ---
-        // Armazena todos os objetos gerenciados pelo motor, incluindo Three.js, Cannon.js e a malha de colisão
         this.objetosNaCena = {}; 
-        this.estaRodando = false; // Controla o estado da simulação (play/pause)
+        this.estaRodando = false; 
         
         // --- Inicialização ---
         this._configurarRenderizador();
-        this._configurarCamera(opcoes);
-        this._configurarIluminacaoPadrao();
-        this._configurarMundoFisica(opcoes);
+        this._configurarCamera();
+        this._configurarIluminacaoPadrao(); // Será chamado de forma mais controlada
+        this._configurarMundoFisica();
         this._configurarControles();
         this._configurarEventos();
 
@@ -58,7 +59,6 @@ class MotorJM {
 
     // --- MÉTODOS DE CONFIGURAÇÃO INTERNA ---
 
-    /** Configura o renderizador WebGL com sombras e mapeamento de tons para PBR. */
     _configurarRenderizador() {
         this.renderizador.setSize(this.container.clientWidth, this.container.clientHeight);
         this.renderizador.shadowMap.enabled = true;
@@ -66,51 +66,46 @@ class MotorJM {
         this.renderizador.outputEncoding = THREE.sRGBEncoding;
         this.renderizador.toneMapping = THREE.ACESFilmicToneMapping;
         this.renderizador.toneMappingExposure = 1.0;
-        this.renderizador.setPixelRatio(window.devicePixelRatio || 1); // Garante boa resolução em telas de alta densidade
+        this.renderizador.setPixelRatio(window.devicePixelRatio || 1);
         this.container.appendChild(this.renderizador.domElement);
     }
 
-    /** Configura a câmera e o fundo da cena. */
     _configurarCamera(opcoes = {}) {
-        // A câmera padrão do editor
-        this.editorCamera = new THREE.PerspectiveCamera(75, 1, 0.1, 1000); // Aspect ratio será definido dinamicamente
+        this.editorCamera = new THREE.PerspectiveCamera(75, 1, 0.1, 1000);
         this.editorCamera.position.set(0, 10, opcoes.distanciaCameraInicial || 20);
         this.editorCamera.aspect = this.container.clientWidth / this.container.clientHeight;
         this.editorCamera.updateProjectionMatrix();
         
-        this.activeCamera = this.editorCamera; // Inicialmente, a câmera ativa é a do editor
-        this.cena.background = new THREE.Color(this.cena._backgroundConfig.color); // Fundo escuro padrão
+        this.activeCamera = this.editorCamera; 
+        this.cena.background = new THREE.Color(this.cena._backgroundConfig.color); 
     }
 
-    /** Adiciona luzes padrão para que a cena não comece totalmente escura. */
     _configurarIluminacaoPadrao() {
-        // As luzes padrão são adicionadas com um ID que termina em '_padrao' para serem ignoradas na geração do script
-        this.adicionarLuz('luz_ambiente_padrao', 'Luz Ambiente Padrão', { type: 'ambiente', color: 0xffffff, intensity: 0.3 });
-        this.adicionarLuz('luz_direcional_padrao', 'Luz Direcional Padrão', { type: 'direcional', color: 0xffffff, intensity: 1, position: new THREE.Vector3(10, 20, 10), castShadow: true });
+        // Agora esta função só é chamada se o script do mundo não adicionar suas próprias luzes
+        if (!Object.values(this.objetosNaCena).some(obj => obj.type.startsWith('luz_') && !obj.id.endsWith('_padrao_removivel'))) {
+            this.adicionarLuz('luz_ambiente_padrao_removivel', 'Ambiente Padrão', { type: 'ambiente', color: 0xffffff, intensity: 0.3 });
+            this.adicionarLuz('luz_direcional_padrao_removivel', 'Direcional Padrão', { type: 'direcional', color: 0xffffff, intensity: 1, position: new THREE.Vector3(10, 20, 10), castShadow: true });
+        }
     }
 
-    /** Configura as propriedades globais do mundo da física. */
     _configurarMundoFisica(opcoes = {}) {
         this.mundoFisica.gravity.copy(opcoes.gravidade || new CANNON.Vec3(0, -9.82, 0));
         this.mundoFisica.broadphase = new CANNON.SAPBroadphase(this.mundoFisica);
-        this.mundoFisica.defaultContactMaterial.contactEquationStiffness = 1e9; // Reduz penetração entre corpos
-        this.mundoFisica.defaultContactMaterial.contactEquationRelaxation = 4; // Contatos mais suaves
+        this.mundoFisica.defaultContactMaterial.friction = opcoes.friccaoPadrao || 0.7;
+        this.mundoFisica.defaultContactMaterial.restitution = opcoes.restituicaoPadrao || 0.3;
     }
 
-    /** Inicializa os controles de órbita e transformação. */
     _configurarControles() {
-        this.controlesOrbit = new THREE.OrbitControls(this.editorCamera, this.renderizador.domElement); // OrbitControls usa a editorCamera
+        this.controlesOrbit = new THREE.OrbitControls(this.editorCamera, this.renderizador.domElement); 
         this.controlesOrbit.enableDamping = true;
 
-        this.controlesTransform = new THREE.TransformControls(this.editorCamera, this.renderizador.domElement); // TransformControls usa a editorCamera
+        this.controlesTransform = new THREE.TransformControls(this.editorCamera, this.renderizador.domElement); 
         this.cena.add(this.controlesTransform);
 
-        // Desativa os controles de órbita enquanto os controles de transformação estiverem ativos
         this.controlesTransform.addEventListener('dragging-changed', (event) => {
             this.controlesOrbit.enabled = !event.value;
         });
 
-        // Sincroniza a física quando um objeto é movido no modo de edição
         this.controlesTransform.addEventListener('objectChange', () => {
             if (this.objetoSelecionadoId && !this.estaRodando) {
                 const obj = this.objetosNaCena[this.objetoSelecionadoId];
@@ -122,11 +117,10 @@ class MotorJM {
         });
     }
 
-    /** Configura os listeners de eventos globais. */
     _configurarEventos() {
         window.addEventListener('resize', () => this._aoRedimensionarJanela());
         this.renderizador.domElement.addEventListener('click', (e) => {
-            if (this.controlesTransform.dragging) return; // Evita seleção se estiver arrastando
+            if (this.controlesTransform.dragging) return; 
             this._manipularSelecao(e);
         });
         window.addEventListener('keydown', (e) => {
@@ -134,7 +128,6 @@ class MotorJM {
         });
     }
     
-    /** Mapeia nomes de cores em português para códigos hexadecimais. */
     _traduzirCor(nomeCor) {
         const mapaCores = {
             'vermelho': '#ff0000', 'verde': '#00ff00', 'azul': '#0000ff',
@@ -143,35 +136,49 @@ class MotorJM {
             'laranja': '#ffa500', 'roxo': '#800080', 'marrom': '#a52a2a',
             'prata': '#c0c0c0', 'ouro': '#ffd700', 'bronze': '#cd7f32'
         };
-        // Retorna o código hex se encontrado, senão retorna o valor original (pode ser hex ou nome inglês)
         return mapaCores[String(nomeCor).toLowerCase()] || nomeCor; 
     }
     
-    /**
-     * Cria um material PBR (Physically Based Rendering) padrão.
-     * Suporta cor base, rugosidade, metalização e mapas de textura.
-     * @param {object} opcoes - Opções para o material.
-     * @returns {THREE.MeshStandardMaterial} O material Three.js criado.
-     */
     _criarMaterial(opcoes = {}) {
         if (typeof opcoes !== 'object' || opcoes === null) {
-            console.warn(`MotorJM (Aviso Material): Opções de material inválidas ou ausentes. Usando valores padrão.`);
             opcoes = {}; 
         }
 
         let corFinal = this._traduzirCor(opcoes.color || '#ffffff');
-        
         const material = new THREE.MeshStandardMaterial({
             color: new THREE.Color(corFinal),
             roughness: opcoes.roughness !== undefined ? opcoes.roughness : 0.5,
             metalness: opcoes.metalness !== undefined ? opcoes.metalness : 0.5,
         });
 
-        const carregarTextura = (mapType, url) => {
-            if (!url) {
-                console.warn(`MotorJM (Aviso Textura): URL de textura para '${mapType}' está vazia ou inválida. Ignorando.`);
+        const carregarTextura = (mapType, source) => {
+            if (!source) return null;
+            let url = '';
+            let name = '';
+
+            if (typeof source === 'string') { 
+                url = source;
+                name = source.substring(source.lastIndexOf('/') + 1);
+                const decodedSourceName = this._firebaseDecodeKey(source); 
+                const texturePath = ['assets', 'textures', decodedSourceName]; // Caminho completo para a textura
+                let textureInFS = this.fileSystemReference;
+                for(const part of texturePath) {
+                    if (textureInFS && textureInFS[part]) textureInFS = textureInFS[part];
+                    else { textureInFS = null; break; }
+                }
+
+                if (!source.startsWith('http') && !source.startsWith('data:') && textureInFS && textureInFS.url) {
+                    url = textureInFS.url; 
+                    name = decodedSourceName; 
+                }
+            } else if (typeof source === 'object' && source.url) { 
+                url = source.url;
+                name = source.name;
+            } else {
+                console.warn(`MotorJM (Aviso Textura): Fonte de textura inválida para '${mapType}'.`);
                 return null;
             }
+
             const textura = this.textureLoader.load(url, (tex) => {
                 if (mapType === 'map') tex.encoding = THREE.sRGBEncoding; 
                 tex.wrapS = tex.wrapT = THREE.RepeatWrapping; 
@@ -179,17 +186,15 @@ class MotorJM {
             }, 
             undefined, 
             (err) => {
-                console.error(`MotorJM (Erro Textura): Não foi possível carregar a textura de '${url}' para o mapa '${mapType}'.`, err);
+                console.error(`MotorJM (Erro Textura): Não foi possível carregar a textura de '${name}' (URL: ${url}) para o mapa '${mapType}'.`, err);
             });
-            // O nome da textura pode vir de um objeto (carregado do fileSystem) ou ser a URL (carregamento direto)
-            try { textura.name = typeof url === 'object' && url.name ? url.name : url.substring(url.lastIndexOf('/') + 1); } catch (e) { textura.name = url; }
+            textura.name = name; 
             return textura;
         };
         
-        // Aceita url direta (string) ou um objeto {url: string, name: string}
-        if (opcoes.map) material.map = carregarTextura('map', typeof opcoes.map === 'string' ? opcoes.map : opcoes.map.url);
-        if (opcoes.metalnessMap) material.metalnessMap = carregarTextura('metalnessMap', typeof opcoes.metalnessMap === 'string' ? opcoes.metalnessMap : opcoes.metalnessMap.url);
-        if (opcoes.roughnessMap) material.roughnessMap = carregarTextura('roughnessMap', typeof opcoes.roughnessMap === 'string' ? opcoes.roughnessMap : opcoes.roughnessMap.url);
+        if (opcoes.map) material.map = carregarTextura('map', opcoes.map);
+        if (opcoes.metalnessMap) material.metalnessMap = carregarTextura('metalnessMap', opcoes.metalnessMap);
+        if (opcoes.roughnessMap) material.roughnessMap = carregarTextura('roughnessMap', opcoes.roughnessMap);
         
         return material;
     }
@@ -197,17 +202,13 @@ class MotorJM {
 
     // --- MÉTODOS PÚBLICOS DE CONTROLE DA SIMULAÇÃO ---
 
-    /** Inicia o loop de animação (renderização contínua). */
     iniciar() {
         this._loopAnimacao();
     }
 
-    /** Inicia a simulação da física, desativando os controles de edição. */
     play() {
         this.estaRodando = true;
-        
         this.tempEditorCameraTarget.copy(this.controlesOrbit.target);
-
         if (this.objetoSelecionadoId) {
             const selectedObj = this.objetosNaCena[this.objetoSelecionadoId];
             if (selectedObj && selectedObj.type === 'camera_jogo') {
@@ -218,30 +219,20 @@ class MotorJM {
         } else {
             this.activeCamera = this.editorCamera; 
         }
-
         this.desselecionarObjeto(); 
         this.controlesOrbit.enabled = false; 
-        
         Object.values(this.objetosNaCena).forEach(obj => {
-            if (obj.collisionWireframe) {
-                obj.collisionWireframe.visible = false;
-            }
-            if (obj.cameraHelper) { 
-                obj.cameraHelper.visible = false;
-            }
+            if (obj.collisionWireframe) obj.collisionWireframe.visible = false;
+            if (obj.cameraHelper) obj.cameraHelper.visible = false;
         });
-
         console.log(`MotorJM (Info): Simulação iniciada. Câmera ativa: ${this.activeCamera === this.editorCamera ? 'Editora' : (this.objetosNaCena[this.objetoSelecionadoId]?.name || 'Câmera de Jogo Selecionada')}.`);
     }
 
-    /** Para a simulação da física e reseta todos os objetos para suas posições e rotações iniciais. */
     parar() {
         this.estaRodando = false;
-        
         this.activeCamera = this.editorCamera; 
         this.controlesOrbit.enabled = true; 
         this.controlesOrbit.target.copy(this.tempEditorCameraTarget); 
-
         console.log("MotorJM (Info): Simulação parada. Resetando objetos...");
         Object.values(this.objetosNaCena).forEach(obj => {
             if (obj.cannonBody && obj.estadoInicial) {
@@ -249,22 +240,16 @@ class MotorJM {
                 obj.cannonBody.quaternion.copy(obj.estadoInicial.quaternion);
                 obj.cannonBody.velocity.set(0, 0, 0); 
                 obj.cannonBody.angularVelocity.set(0, 0, 0); 
-                
                 obj.threeObj.position.copy(obj.estadoInicial.position);
                 obj.threeObj.quaternion.copy(obj.estadoInicial.quaternion);
             }
         });
-
-        if (this.objetoSelecionadoId) {
-            this.selecionarObjeto(this.objetoSelecionadoId); 
-        }
+        if (this.objetoSelecionadoId) this.selecionarObjeto(this.objetoSelecionadoId); 
     }
     
-    /** O coração do motor: atualiza controles, física e renderiza a cena a cada quadro. */
     _loopAnimacao() {
         requestAnimationFrame(() => this._loopAnimacao()); 
         this.controlesOrbit.update(); 
-
         if (this.estaRodando) {
             this.mundoFisica.step(1 / 60); 
             Object.values(this.objetosNaCena).forEach(obj => {
@@ -280,27 +265,9 @@ class MotorJM {
     
     // --- MÉTODOS DE GERENCIAMENTO DE OBJETOS ---
 
-    /**
-     * Adiciona um novo objeto geométrico à cena e, opcionalmente, ao mundo da física.
-     * @param {string} id - Um identificador único para o objeto.
-     * @param {string} name - Um nome amigável para exibição na UI.
-     * @param {string} type - O tipo de geometria ('caixa', 'esfera', 'plano', 'camera', etc.).
-     * @param {object} [opcoes] - Opções de configuração para posição, material, física, etc.
-     *   - opcoes.physics.bodyType: 'none' | 'static' | 'dynamic' (padrão: 'none' para objetos, 'static' para plano)
-     *   - opcoes.physics.mass: number (padrão: 1, relevante apenas para 'dynamic')
-     *   - opcoes.physics.friction: number (padrão: 0.7)
-     *   - opcoes.physics.restitution: number (padrão: 0.3)
-     *   - opcoes.physics.collisionShape: 'box' | 'sphere' | 'plane' (padrão inferido pelo tipo)
-     *   - opcoes.physics.linearDamping: number (padrão: 0.01)
-     *   - opcoes.physics.angularDamping: number (padrão: 0.01)
-     *   - opcoes.fov: number (para câmeras)
-     *   - opcoes.near: number (para câmeras)
-     *   - opcoes.far: number (para câmeras)
-     * @returns {object|null} O objeto recém-criado (com threeObj e cannonBody) ou nulo se o ID já existir.
-     */
-    adicionarObjeto(id, name, type, opcoes = {}) {
+    adicionarObjeto(id, name, type, opcoes = {}) { 
         if (this.objetosNaCena[id]) {
-            console.warn(`MotorJM (Aviso Objeto): Tentativa de adicionar objeto com ID repetido '${id}'. Use um ID único. Operação cancelada.`);
+            console.warn(`MotorJM (Aviso Objeto): Tentativa de adicionar objeto com ID repetido '${id}'.`);
             return null;
         }
 
@@ -323,7 +290,6 @@ class MotorJM {
             cameraHelper = new THREE.CameraHelper(threeObj);
             this.cena.add(cameraHelper);
             cameraHelper.visible = false; 
-            
             type = 'camera_jogo'; 
 
             console.log(`MotorJM (Info Câmera): Câmera de Jogo '${name}' (ID: ${id}) adicionada.`);
@@ -337,9 +303,9 @@ class MotorJM {
             this.objetosNaCena[id] = newObj;
             return newObj;
 
-        } else { // Lógica para objetos geométricos (meshes)
+        } else { 
             let geometry;
-            const material = this._criarMaterial(opcoes.material);
+            const material = this._criarMaterial(opcoes.material); 
 
             switch (type) {
                 case 'caixa':
@@ -355,7 +321,7 @@ class MotorJM {
                     geometry = new THREE.PlaneGeometry(ps.w, ps.d);
                     break;
                 default:
-                    console.error(`MotorJM (Erro Objeto): Tipo de objeto geométrico desconhecido: '${type}'. Tipos suportados: 'caixa', 'esfera', 'plano', 'camera'.`);
+                    console.error(`MotorJM (Erro Objeto): Tipo de objeto geométrico desconhecido: '${type}'.`);
                     return null;
             }
 
@@ -404,16 +370,11 @@ class MotorJM {
             this.objetosNaCena[id] = newObj;
 
             this._createOrUpdateCannonBody(newObj);
-
             console.log(`MotorJM (Info Objeto): Objeto '${name}' (ID: ${id}, Tipo: ${type}) adicionado.`);
             return newObj;
         }
     }
 
-    /**
-     * Cria, atualiza ou remove o corpo Cannon.js de um objeto.
-     * @param {object} obj - O objeto do motor (de this.objetosNaCena)
-     */
     _createOrUpdateCannonBody(obj) {
         if (!obj.threeObj.isMesh || !obj.physicsProperties) return;
 
@@ -426,17 +387,15 @@ class MotorJM {
         if (obj.physicsProperties.bodyType === 'dynamic') {
             finalMass = obj.physicsProperties.mass;
             if (finalMass < 0) { 
-                console.warn(`MotorJM (Aviso Física): Massa negativa (${finalMass}) detectada para o objeto dinâmico '${obj.id}'. Usando massa 1.`);
                 finalMass = 1;
                 obj.physicsProperties.mass = 1; 
             }
         } else if (obj.physicsProperties.bodyType === 'static') {
             finalMass = 0; 
             obj.physicsProperties.mass = 0; 
-        } else { // bodyType === 'none'
+        } else { 
             obj.collisionWireframe.material.color.set(this._traduzirCor('vermelho')); 
             obj.collisionWireframe.material.needsUpdate = true;
-            console.log(`MotorJM (Info Física): Corpo físico para '${obj.id}' removido (bodyType: 'none').`);
             return;
         }
 
@@ -460,7 +419,7 @@ class MotorJM {
                     cannonShape = new CANNON.Plane();
                     break;
                 default:
-                    console.error(`MotorJM (Erro Física): Forma de colisão desconhecida: '${obj.physicsProperties.collisionShape}' para o objeto '${obj.id}'. Não foi possível criar o corpo físico.`);
+                    console.error(`MotorJM (Erro Física): Forma de colisão desconhecida: '${obj.physicsProperties.collisionShape}' para o objeto '${obj.id}'.`);
                     obj.cannonBody = null; 
                     this._atualizarCorMalhaColisao(obj.id); 
                     return;
@@ -482,7 +441,6 @@ class MotorJM {
             obj.cannonBody.material = bodyMaterial;
 
             this.mundoFisica.addBody(obj.cannonBody);
-            console.log(`MotorJM (Info Física): Corpo físico para '${obj.id}' criado/recriado (Tipo: '${obj.physicsProperties.bodyType}', Massa: ${finalMass}, Fricção: ${obj.physicsProperties.friction}, Restituição: ${obj.physicsProperties.restitution}, Forma: ${obj.physicsProperties.collisionShape}, LinearDamping: ${obj.physicsProperties.linearDamping}, AngularDamping: ${obj.physicsProperties.angularDamping}).`);
             this._atualizarCorMalhaColisao(obj.id); 
         } catch (e) {
             console.error(`MotorJM (Erro Física): Falha ao criar/recriar corpo físico para '${obj.id}':`, e);
@@ -491,10 +449,6 @@ class MotorJM {
         }
     }
 
-    /**
-     * Atualiza a cor da malha de colisão de um objeto com base no seu tipo de corpo físico.
-     * @param {string} id - O ID do objeto.
-     */
     _atualizarCorMalhaColisao(id) {
         const obj = this.objetosNaCena[id];
         if (!obj || !obj.collisionWireframe) return;
@@ -510,7 +464,7 @@ class MotorJM {
 
     adicionarLuz(id, name, opcoes) {
         if (this.objetosNaCena[id]) {
-             console.warn(`MotorJM (Aviso Luz): Tentativa de adicionar luz com ID repetido '${id}'. Use um ID único. Operação cancelada.`);
+             console.warn(`MotorJM (Aviso Luz): Tentativa de adicionar luz com ID repetido '${id}'.`);
             return;
         }
         let luz;
@@ -541,7 +495,7 @@ class MotorJM {
                  if (opcoes.castShadow) luz.castShadow = true;
                 break;
             default: 
-                console.error(`MotorJM (Erro Luz): Tipo de luz desconhecido: '${opcoes.type}'. Tipos suportados: 'ambiente', 'direcional', 'ponto'.`); 
+                console.error(`MotorJM (Erro Luz): Tipo de luz desconhecido: '${opcoes.type}'.`); 
                 return;
         }
         this.cena.add(luz); 
@@ -549,7 +503,6 @@ class MotorJM {
         console.log(`MotorJM (Info Luz): Luz '${name}' (ID: ${id}, Tipo: ${opcoes.type}) adicionada.`);
     }
 
-    /** Remove um objeto da cena e do mundo da física, liberando memória. */
     removerObjeto(id) {
         const obj = this.objetosNaCena[id];
         if (!obj) {
@@ -580,7 +533,6 @@ class MotorJM {
         } else if (obj.type === 'camera_jogo') { 
             if (obj.cameraHelper) {
                 this.cena.remove(obj.cameraHelper);
-                // CameraHelper não tem um .dispose() direto, mas seus materiais/geometrias sim
                 if (obj.cameraHelper.material) obj.cameraHelper.material.dispose();
                 if (obj.cameraHelper.geometry) obj.cameraHelper.geometry.dispose();
             }
@@ -594,7 +546,6 @@ class MotorJM {
         console.log(`MotorJM (Info Remoção): Objeto '${obj.name || obj.id}' removido com sucesso.`);
     }
     
-    /** Atalho para remover o objeto atualmente selecionado. */
     removerObjetoSelecionado() { 
         if (this.objetoSelecionadoId) {
             this.removerObjeto(this.objetoSelecionadoId);
@@ -603,31 +554,42 @@ class MotorJM {
         }
     }
     
-    /** Remove todos os objetos da cena (exceto as luzes padrão). */
-    limparCena() { 
-        const idsParaRemover = Object.keys(this.objetosNaCena).filter(id => !id.endsWith('_padrao'));
-        if (idsParaRemover.length === 0) {
-            console.log("MotorJM (Info Limpeza): Nenhuns objetos adicionados pelo usuário para remover.");
-        }
+    // MODIFICADO: Limpa a cena completamente, incluindo luzes padrão
+    limparCenaTotalmente() {
+        console.log("MotorJM (Info Limpeza): Limpando cena totalmente...");
+        // Remove todos os objetos, incluindo os "_padrao"
+        const idsParaRemover = Object.keys(this.objetosNaCena);
         idsParaRemover.forEach(id => this.removerObjeto(id));
-        console.log(`MotorJM (Info Limpeza): Cena limpa. ${idsParaRemover.length} objetos removidos.`);
-
-        // NOVO: Resetar background e environment map para o estado padrão
-        this.cena.background = new THREE.Color(this.cena._backgroundConfig.color);
+        
+        // Reseta configurações de fundo e neblina
+        this.cena.background = new THREE.Color(this.cena._backgroundConfig.color); // Usa cor padrão inicial
         if (this.cena.environment) {
             this.cena.environment.dispose();
             this.cena.environment = null;
         }
         this.cena._backgroundConfig.environmentMapName = 'Nenhuma';
+        this.cena.fog = null;
+
+        // Limpa o mundo da física (opcional, mas bom para um reset completo)
+        while(this.mundoFisica.bodies.length > 0){
+            this.mundoFisica.removeBody(this.mundoFisica.bodies[0]);
+        }
+        console.log(`MotorJM (Info Limpeza): Cena totalmente limpa. ${idsParaRemover.length} objetos removidos.`);
+    }
+
+    // Mantém a função `limparCena` original para o "Gerar Script" que não deve remover luzes padrão
+    limparCena() { 
+        const idsParaRemover = Object.keys(this.objetosNaCena).filter(id => !id.endsWith('_padrao_removivel'));
+        if (idsParaRemover.length === 0 && !Object.keys(this.objetosNaCena).some(id => id.endsWith('_padrao_removivel'))) {
+           // console.log("MotorJM (Info Limpeza): Nenhuns objetos adicionados pelo usuário para remover.");
+        }
+        idsParaRemover.forEach(id => this.removerObjeto(id));
+        // console.log(`MotorJM (Info Limpeza): Objetos do usuário limpos. ${idsParaRemover.length} objetos removidos.`);
     }
 
 
     // --- MÉTODOS DE MANIPULAÇÃO E INTERAÇÃO ---
 
-    /**
-     * Seleciona um objeto na cena para edição e anexar os controles de transformação.
-     * @param {string} id - O ID do objeto a ser selecionado.
-     */
     selecionarObjeto(id) {
         if (!id || !this.objetosNaCena[id]) {
             console.warn(`MotorJM (Aviso Seleção): Objeto com ID '${id}' não encontrado para seleção.`);
@@ -658,7 +620,6 @@ class MotorJM {
         console.log(`MotorJM (Info Seleção): Objeto '${this.objetosNaCena[id].name || id}' selecionado.`);
     }
 
-    /** Desseleciona o objeto atualmente selecionado, desanexando os controles de transformação. */
     desselecionarObjeto() {
         if (this.objetoSelecionadoId) {
             const obj = this.objetosNaCena[this.objetoSelecionadoId];
@@ -678,12 +639,6 @@ class MotorJM {
         }
     }
     
-    /**
-     * Atualiza uma propriedade de um objeto dinamicamente. Suporta propriedades aninhadas e tipos específicos (cor, textura, física, câmera).
-     * @param {string} id - O ID do objeto a ser atualizado.
-     * @param {string} prop - A propriedade a ser alterada (ex: 'position.x', 'material.color', 'physics.mass', 'fov').
-     * @param {*} value - O novo valor para a propriedade.
-     */
     atualizarPropriedadeObjeto(id, prop, value) {
         const obj = this.objetosNaCena[id];
         if (!obj) {
@@ -745,7 +700,7 @@ class MotorJM {
         
         for (let i = 0; i < keys.length - 1; i++) { 
             if (target[keys[i]] === undefined) {
-                console.error(`MotorJM (Erro Atualização): Propriedade aninhada '${keys[i]}' não encontrada no caminho '${prop}' para o objeto '${id}'. Não foi possível atualizar.`);
+                console.error(`MotorJM (Erro Atualização): Propriedade aninhada '${keys[i]}' não encontrada no caminho '${prop}' para o objeto '${id}'.`);
                 return;
             }
             target = target[keys[i]]; 
@@ -760,7 +715,6 @@ class MotorJM {
                 console.error(`MotorJM (Erro Atualização): Valor de cor inválido '${value}' para o objeto '${id}'.`, e);
             }
         } else if (['map', 'metalnessMap', 'roughnessMap'].includes(finalKey)) {
-            // Aceita o Data URL diretamente para carregamento
             if (typeof value === 'object' && value !== null && value.url) {
                 const textura = this.textureLoader.load(value.url, (tex) => {
                     if (finalKey === 'map') tex.encoding = THREE.sRGBEncoding;
@@ -776,11 +730,11 @@ class MotorJM {
             } else if (value === null) { 
                  if (target[finalKey]) { target[finalKey].dispose(); target[finalKey] = null; console.log(`MotorJM (Info Atualização): Textura de '${finalKey}' removida do objeto '${id}'.`); }
             } else {
-                console.error(`MotorJM (Erro Atualização): Valor de textura inválido para '${finalKey}' no objeto '${id}'. Esperava {url: string, name: string} ou null.`);
+                console.error(`MotorJM (Erro Atualização): Valor de textura inválido para '${finalKey}' no objeto '${id}'.`);
             }
         } else {
             if (target[finalKey] === undefined) {
-                console.error(`MotorJM (Erro Atualização): Propriedade '${finalKey}' não existe para o objeto '${id}' no caminho '${prop}'. Não foi possível atualizar.`);
+                console.error(`MotorJM (Erro Atualização): Propriedade '${finalKey}' não existe para o objeto '${id}' no caminho '${prop}'.`);
                 return;
             }
             target[finalKey] = value;
@@ -806,15 +760,9 @@ class MotorJM {
     
     // --- MÉTODOS GETTERS E DE CONFIGURAÇÃO DA CENA ---
     
-    /** Retorna o mapa de todos os objetos atualmente na cena. */
     getObjetosNaCena() { return this.objetosNaCena; }
-    /** Retorna os controles de transformação para manipulação direta (para a UI). */
     getControlesTransform() { return this.controlesTransform; }
     
-    /**
-     * Configura a neblina na cena.
-     * @param {object} opcoes - {enabled: boolean, color: string, near: number, far: number}
-     */
     configurarNeblina(opcoes) { 
         if (opcoes.enabled) {
             const corNeblina = this._traduzirCor(opcoes.color || '#87ceeb');
@@ -826,41 +774,43 @@ class MotorJM {
         }
     }
     
-    /**
-     * Configura a gravidade do mundo da física.
-     * @param {number} x - Gravidade no eixo X.
-     * @param {number} y - Gravidade no eixo Y.
-     * @param {number} z - Gravidade no eixo Z.
-     */
     configurarGravidade(x, y, z) { 
         this.mundoFisica.gravity.set(x, y, z);
         console.log(`MotorJM (Info Cena): Gravidade configurada para X:${x}, Y:${y}, Z:${z}.`);
     }
 
-    /**
-     * Configura o fundo da cena (cor sólida ou imagem ambiente).
-     * @param {object} opcoes - {color: string (opcional), environmentMap: File | string | null (opcional)}
-     */
     configurarFundoCena(opcoes = {}) {
-        // Se a cor for fornecida, atualiza o background e a configuração salva
         if (opcoes.color !== undefined) {
             this.cena.background = new THREE.Color(this._traduzirCor(opcoes.color));
             this.cena._backgroundConfig.color = opcoes.color;
             console.log(`MotorJM (Info Cena): Cor de fundo alterada para '${opcoes.color}'.`);
         }
 
-        // Limpa ambiente map existente para evitar acúmulo antes de carregar um novo
         if (this.cena.environment) {
             this.cena.environment.dispose();
             this.cena.environment = null;
         }
 
         if (opcoes.environmentMap !== undefined && opcoes.environmentMap !== null) {
-            const source = opcoes.environmentMap; // Pode ser File (upload) ou Data URL (projeto carregado)
-            let fileUrl = typeof source === 'string' ? source : (source.url || URL.createObjectURL(source)); // Se for um objeto com 'url' ou um File
-            let fileName = typeof source === 'string' ? `(Embedded) ${source.substring(source.lastIndexOf('/') + 1, source.lastIndexOf(';'))}` : source.name;
+            const source = opcoes.environmentMap; 
+            let fileUrl = '';
+            let fileName = '';
 
-            // Atualiza o nome da imagem ambiente na configuração da cena
+            if (typeof source === 'string') { 
+                fileUrl = source; // Assume que é uma Data URL
+                fileName = `(Embedded) ${source.substring(source.lastIndexOf('/') + 1, source.lastIndexOf(';')) || source.substring(0,30)+"..."}`;
+            } else if (source instanceof File) { 
+                fileUrl = URL.createObjectURL(source);
+                fileName = source.name;
+            } else if (typeof source === 'object' && source.url) { 
+                fileUrl = source.url;
+                fileName = source.name;
+            } else {
+                console.warn(`MotorJM (Aviso Cena): Fonte de imagem ambiente inválida. Ignorando.`);
+                this.cena._backgroundConfig.environmentMapName = 'Nenhuma';
+                return;
+            }
+
             this.cena._backgroundConfig.environmentMapName = fileName; 
 
             if (fileName.toLowerCase().endsWith('.hdr') || fileUrl.startsWith('data:image/vnd.radiance')) {
@@ -873,13 +823,13 @@ class MotorJM {
                     this.cena.background = envMap; 
                     texture.dispose();
                     pmremGenerator.dispose();
-                    if (typeof source !== 'string' && source instanceof File) URL.revokeObjectURL(fileUrl); // Apenas revoga se foi criado localmente de um File
+                    if (source instanceof File) URL.revokeObjectURL(fileUrl); 
                     console.log(`MotorJM (Info Cena): Imagem ambiente HDR '${fileName}' carregada.`);
                 }, undefined, (err) => {
                     console.error(`MotorJM (Erro Cena): Falha ao carregar imagem ambiente HDR '${fileName}':`, err);
-                    if (typeof source !== 'string' && source instanceof File) URL.revokeObjectURL(fileUrl);
+                    if (source instanceof File) URL.revokeObjectURL(fileUrl);
                 });
-            } else if (fileName.match(/\.(png|jpg|jpeg)$/i) || fileUrl.startsWith('data:image/')) { // Imagens comuns
+            } else if (fileName.match(/\.(png|jpg|jpeg)$/i) || fileUrl.startsWith('data:image/')) { 
                 this.textureLoader.load(fileUrl, (texture) => {
                     const pmremGenerator = new THREE.PMREMGenerator(this.renderizador);
                     pmremGenerator.compileEquirectangularShader();
@@ -887,38 +837,28 @@ class MotorJM {
 
                     this.cena.environment = envMap;
                     this.cena.background = new THREE.CubeTextureLoader().load([
-                        fileUrl, fileUrl, fileUrl, fileUrl, fileUrl, fileUrl // Simula um cube map para background
+                        fileUrl, fileUrl, fileUrl, fileUrl, fileUrl, fileUrl 
                     ]); 
                     texture.dispose();
                     pmremGenerator.dispose();
-                    if (typeof source !== 'string' && source instanceof File) URL.revokeObjectURL(fileUrl);
+                    if (source instanceof File) URL.revokeObjectURL(fileUrl);
                     console.log(`MotorJM (Info Cena): Imagem ambiente '${fileName}' carregada.`);
                 }, undefined, (err) => {
                     console.error(`MotorJM (Erro Cena): Falha ao carregar imagem ambiente '${fileName}':`, err);
-                    if (typeof source !== 'string' && source instanceof File) URL.revokeObjectURL(fileUrl);
+                    if (source instanceof File) URL.revokeObjectURL(fileUrl);
                 });
             } else {
                 console.warn(`MotorJM (Aviso Cena): Tipo de arquivo para imagem ambiente não suportado: '${fileName}'.`);
-                if (typeof source !== 'string' && source instanceof File) URL.revokeObjectURL(fileUrl);
+                if (source instanceof File) URL.revokeObjectURL(fileUrl);
             }
-        } else if (opcoes.environmentMap === null) { // Caso o environmentMap seja explicitamente null
+        } else if (opcoes.environmentMap === null) { 
             this.cena.environment = null;
-            this.cena.background = new THREE.Color(this._traduzirCor(opcoes.color || '#1a1a1a')); // Volta para cor de fundo
+            this.cena.background = new THREE.Color(this._traduzirCor(opcoes.color || this.cena._backgroundConfig.color || '#1a1a1a')); 
             this.cena._backgroundConfig.environmentMapName = 'Nenhuma';
             console.log("MotorJM (Info Cena): Imagem ambiente removida.");
         }
     }
 
-    /**
-     * Aplica configurações de renderização diretamente ao renderizador.
-     * @param {object} opcoes - Objeto com as configurações de renderização.
-     *   - sombrasHabilitadas: boolean
-     *   - tipoSombra: 'BasicShadowMap' | 'PCFSoftShadowMap' | 'VSMShadowMap'
-     *   - toneMappingHabilitado: boolean
-     *   - exposicaoToneMapping: number
-     *   - pixelRatio: number
-     *   - shadowMapSize: number (para luzes direcionais)
-     */
     aplicarConfiguracoesDeRenderizacao(opcoes = {}) {
         if (opcoes.hasOwnProperty('sombrasHabilitadas')) {
             this.renderizador.shadowMap.enabled = opcoes.sombrasHabilitadas;
@@ -954,11 +894,6 @@ class MotorJM {
         console.log("MotorJM (Info Gráficos): Configurações de renderização aplicadas.");
     }
 
-    /**
-     * Aplica um preset de qualidade gráfica.
-     * @param {'baixa'|'media'|'alta'} preset - O nível de qualidade a ser aplicado.
-     * @returns {object} As configurações aplicadas pelo preset.
-     */
     aplicarPresetQualidade(preset) {
         let settings = {};
         switch (preset) {
@@ -992,7 +927,6 @@ class MotorJM {
         return settings; 
     }
 
-    /** Redimensiona o renderizador e a câmera quando a janela muda de tamanho. */
     _aoRedimensionarJanela() {
         this.editorCamera.aspect = this.container.clientWidth / this.container.clientHeight;
         this.editorCamera.updateProjectionMatrix();
@@ -1011,7 +945,6 @@ class MotorJM {
         console.log("MotorJM (Info): Janela redimensionada. Câmeras e renderizador atualizados.");
     }
     
-    /** Manipula cliques no canvas para seleção de objetos. */
     _manipularSelecao(event) {
         if (this.estaRodando || this.controlesTransform.dragging) return;
 
@@ -1063,14 +996,12 @@ class MotorJM {
         }
     }
 
-    /**
-     * Executa um script JavaScript fornecido como string.
-     * @param {string} code - O código JavaScript a ser executado.
-     * @param {string} [name='(script)'] - Um nome para o script, usado em mensagens de erro.
-     */
     executeScript(code, name = '(script)') {
         try {
+            // Ao executar um script (de um mundo), sempre adiciona as luzes padrão DEPOIS,
+            // para que o script do mundo possa definir suas próprias luzes.
             new Function('motor', code)(this); 
+            this._configurarIluminacaoPadrao(); // Garante que haja luzes se o script do mundo não adicionar
             console.log(`MotorJM (Info Script): Script '${name}' executado com sucesso.`);
         } catch (e) {
             console.error(`MotorJM (Erro Script): Erro ao executar script '${name}':`, e);
@@ -1078,53 +1009,64 @@ class MotorJM {
         }
     }
     
-    // --- GERAÇÃO DE SCRIPT ---
+    // --- FUNÇÕES AUXILIARES DE SALVAMENTO/CARREGAMENTO DE PROJETO ---
 
-    /** Gera uma string de código Javascript que recria o estado atual da cena no editor. */
-    gerarScriptDaCena() {
-        let script = `// Script gerado pelo Motor Monkey Editor\n// Para funcionar, as texturas devem estar na mesma pasta do index.html ou ter URLs completas.\n\n`;
-        script += `motor.limparCena();\n\n`; 
+    _getSceneSettings() {
+        const renderer = this.renderizador;
+        const currentLight = Object.values(this.objetosNaCena).find(o => o.threeObj.isDirectionalLight)?.threeObj;
+        const currentShadowMapSize = currentLight?.shadow?.mapSize.width || 1024;
+
+        return {
+            gravity: this.mundoFisica.gravity.toArray(),
+            fogConfig: this.cena.fog ? {
+                enabled: true,
+                color: `#${this.cena.fog.color.getHexString()}`,
+                near: this.cena.fog.near,
+                far: this.cena.fog.far
+            } : { enabled: false },
+            backgroundConfig: {
+                color: `#${this.cena.background?.getHexString() || '1a1a1a'}`,
+                environmentMapName: this.cena._backgroundConfig.environmentMapName 
+            },
+            renderSettings: {
+                sombrasHabilitadas: renderer.shadowMap.enabled,
+                tipoSombra: Object.keys(THREE).find(key => THREE[key] === renderer.shadowMap.type) || 'PCFSoftShadowMap',
+                toneMappingHabilitado: renderer.toneMapping !== THREE.NoToneMapping,
+                exposicaoToneMapping: parseFloat(renderer.toneMappingExposure.toFixed(2)),
+                pixelRatio: parseFloat(renderer.getPixelRatio().toFixed(2)),
+                shadowMapSize: currentShadowMapSize
+            }
+        };
+    }
+
+    gerarScriptDaCena() { 
+        let script = `// Script gerado pelo Motor Monkey Editor\n// Este script recria os objetos e configurações da cena.\n// Para um projeto completo (incluindo arquivos), use a função de "Salvar Nuvem".\n\n`;
+        script += `motor.limparCenaTotalmente();\n\n`; // Limpa completamente para o script gerado
         
-        const g = this.mundoFisica.gravity;
-        script += `motor.configurarGravidade(${g.x.toFixed(2)}, ${g.y.toFixed(2)}, ${g.z.toFixed(2)});\n`;
+        const sceneSettings = this._getSceneSettings();
+
+        const g = sceneSettings.gravity;
+        script += `motor.configurarGravidade(${g[0].toFixed(2)}, ${g[1].toFixed(2)}, ${g[2].toFixed(2)});\n`;
         
-        if (this.cena.fog) {
-            const fogColorHex = `#${this.cena.fog.color.getHexString()}`;
-            script += `motor.configurarNeblina({ enabled: true, color: '${fogColorHex}', near: ${this.cena.fog.near.toFixed(2)}, far: ${this.cena.fog.far.toFixed(2)} });\n`;
+        if (sceneSettings.fogConfig.enabled) {
+            const fog = sceneSettings.fogConfig;
+            script += `motor.configurarNeblina({ enabled: true, color: '${fog.color}', near: ${fog.near.toFixed(2)}, far: ${fog.far.toFixed(2)} });\n`;
         } else {
             script += `motor.configurarNeblina({ enabled: false });\n`;
         }
 
-        // Configurações de Fundo da Cena (Cor e Ambiente Map)
-        let backgroundOpts = {};
-        if (this.cena.background?.isColor) {
-            backgroundOpts.color = `#${this.cena.background.getHexString()}`;
+        const backgroundOpts = sceneSettings.backgroundConfig;
+        let envMapRef = '';
+        if(backgroundOpts.environmentMapName && backgroundOpts.environmentMapName !== 'Nenhuma') {
+            envMapRef = `, environmentMap: '${backgroundOpts.environmentMapName}'`;
         }
-        if (this.cena._backgroundConfig.environmentMapName && this.cena._backgroundConfig.environmentMapName !== 'Nenhuma') {
-            // Nota: Salva apenas o NOME do arquivo. O usuário precisará ter esse arquivo no projeto carregado.
-            backgroundOpts.environmentMap = this.cena._backgroundConfig.environmentMapName; 
-        } else {
-            backgroundOpts.environmentMap = null; 
-        }
-        script += `motor.configurarFundoCena(${JSON.stringify(backgroundOpts, null, 2)});\n`;
+        script += `motor.configurarFundoCena({ color: '${backgroundOpts.color}'${envMapRef} });\n`;
 
-
-        const renderer = this.renderizador;
-        const currentShadowMapSize = Object.values(this.objetosNaCena)
-                                       .filter(obj => obj.threeObj.isDirectionalLight && obj.threeObj.shadow)
-                                       .map(obj => obj.threeObj.shadow.mapSize.width)[0] || 1024; 
-        const renderSettings = {
-            sombrasHabilitadas: renderer.shadowMap.enabled,
-            tipoSombra: Object.keys(THREE).find(key => THREE[key] === renderer.shadowMap.type) || 'PCFSoftShadowMap',
-            toneMappingHabilitado: renderer.toneMapping !== THREE.NoToneMapping,
-            exposicaoToneMapping: parseFloat(renderer.toneMappingExposure.toFixed(2)),
-            pixelRatio: parseFloat(renderer.getPixelRatio().toFixed(2)),
-            shadowMapSize: currentShadowMapSize 
-        };
+        const renderSettings = sceneSettings.renderSettings;
         script += `motor.aplicarConfiguracoesDeRenderizacao(${JSON.stringify(renderSettings, null, 2)});\n\n`;
         
         Object.values(this.objetosNaCena).forEach(obj => {
-            if (obj.id.endsWith('_padrao')) return;
+            if (obj.id.endsWith('_padrao_removivel')) return; // Não inclui luzes padrão removíveis no script gerado
 
             const pos = obj.threeObj.position;
             const rot = obj.threeObj.rotation; 
@@ -1179,8 +1121,6 @@ class MotorJM {
                         roughness: parseFloat(mat.roughness.toFixed(2)),
                         metalness: parseFloat(mat.metalness.toFixed(2))
                     };
-                    // Salva o nome da textura se ela existir (não a Data URL, pois Data URLs são muito grandes para gerar script)
-                    // Para o script gerado, assumimos que as texturas estão disponíveis por nome de arquivo (caminho relativo ou URL)
                     if (mat.map && mat.map.name && !mat.map.name.startsWith('data:')) opts.material.map = mat.map.name;
                     if (mat.roughnessMap && mat.roughnessMap.name && !mat.roughnessMap.name.startsWith('data:')) opts.material.roughnessMap = mat.roughnessMap.name;
                     if (mat.metalnessMap && mat.metalnessMap.name && !mat.metalnessMap.name.startsWith('data:')) opts.material.metalnessMap = mat.metalnessMap.name;
@@ -1214,92 +1154,199 @@ class MotorJM {
         return script;
     }
 
-    /**
-     * Gera uma string de código JavaScript que define uma variável global `window.motorMonkeyProjectData`
-     * contendo o script da cena, a estrutura do gerenciador de arquivos e configurações da cena.
-     * Isso permite salvar e carregar o projeto completo em um único arquivo .js.
-     * @param {string} sceneScriptContent - O conteúdo atual do script da cena (do Ace Editor).
-     * @param {object} fileSystemData - O objeto global `fileSystem` do gerenciador de arquivos.
-     * @param {object} backgroundConfig - As configurações de fundo da cena.
-     * @param {Array<number>} gravity - O vetor de gravidade atual [x, y, z].
-     * @param {boolean} shadowsEnabled - Se as sombras estão habilitadas.
-     * @param {string} shadowMapType - O tipo de shadow map.
-     * @param {boolean} toneMappingEnabled - Se o tone mapping está habilitado.
-     * @param {number} toneMappingExposure - A exposição do tone mapping.
-     * @param {number} pixelRatio - O pixel ratio do renderizador.
-     * @param {number} shadowMapSize - O tamanho do mapa de sombras.
-     * @param {object} fogConfig - As configurações de neblina.
-     * @returns {string} Uma string JavaScript serializável representando o projeto completo.
-     */
-    gerarDadosDoProjeto(sceneScriptContent, fileSystemData, backgroundConfig, gravity, 
-                        shadowsEnabled, shadowMapType, toneMappingEnabled, toneMappingExposure, pixelRatio, shadowMapSize, fogConfig) {
-        
-        // NOVO: Função auxiliar para codificar strings com Base64
-        const encodeString = (str) => btoa(encodeURIComponent(str));
+    _firebaseEncodeKey(key) {
+        if (typeof key !== 'string') return key;
+        return key
+            .replace(/\./g, '_DOT_')
+            .replace(/\#/g, '_HASH_')
+            .replace(/\$/g, '_DOLLAR_')
+            .replace(/\//g, '_SLASH_') 
+            .replace(/\[/g, '_LBRACKET_')
+            .replace(/\]/g, '_RBRACKET_');
+    }
 
-        // NOVO: Função recursiva para codificar URLs e conteúdos no fileSystem
-        const encodeFileSystem = (node) => {
-            const encodedNode = {};
-            for (const key in node) {
+    _firebaseDecodeKey(encodedKey) {
+        if (typeof encodedKey !== 'string') return encodedKey;
+        return encodedKey
+            .replace(/_DOT_/g, '.')
+            .replace(/_HASH_/g, '#')
+            .replace(/_DOLLAR_/g, '$')
+            .replace(/_SLASH_/g, '/')
+            .replace(/_LBRACKET_/g, '[')
+            .replace(/_RBRACKET_/g, ']');
+    }
+
+    gerarDadosDoProjeto(activeWorldScriptContent, fileSystemData, forFirebase = false, activeWorldPathArray = []) {
+        const encodeString = (str) => str ? btoa(encodeURIComponent(str)) : null;
+
+        const processFileSystem = (node, encodeKeys) => {
+            const processedNode = {};
+            for (let key in node) {
                 if (node.hasOwnProperty(key)) {
                     const value = node[key];
-                    if (typeof value === 'object' && value !== null && !value.type) { // É uma pasta
-                        encodedNode[key] = encodeFileSystem(value);
-                    } else if (typeof value === 'object' && value !== null && value.type) { // É um arquivo
-                        encodedNode[key] = { ...value }; // Copia as propriedades
-                        if (encodedNode[key].url) {
-                            encodedNode[key].urlEncoded = encodeString(encodedNode[key].url);
-                            delete encodedNode[key].url; // Remove a original para evitar duplicação no JSON
+                    const newKey = encodeKeys ? this._firebaseEncodeKey(key) : key;
+
+                    if (typeof value === 'object' && value !== null && !value.type) { 
+                        processedNode[newKey] = processFileSystem(value, encodeKeys);
+                    } else if (typeof value === 'object' && value !== null && value.type) { 
+                        processedNode[newKey] = { ...value }; 
+                        if (processedNode[newKey].url && typeof processedNode[newKey].url === 'string') { 
+                            processedNode[newKey].url = encodeString(processedNode[newKey].url); 
                         }
-                        if (encodedNode[key].content) {
-                            encodedNode[key].contentEncoded = encodeString(encodedNode[key].content);
-                            delete encodedNode[key].content; // Remove a original
+                        if (processedNode[newKey].content && typeof processedNode[newKey].content === 'string') {
+                            processedNode[newKey].content = encodeString(processedNode[newKey].content); 
                         }
-                    } else { // Outras propriedades (string, number, boolean)
-                        encodedNode[key] = value;
+                    } else { 
+                        processedNode[newKey] = value;
                     }
                 }
             }
-            return encodedNode;
+            return processedNode;
         };
+        
+        // Garante que as pastas padrão existam no fileSystemData antes de processar
+        if (!fileSystemData.assets) fileSystemData.assets = {};
+        if (!fileSystemData.assets.mundos) fileSystemData.assets.mundos = {};
+        if (!fileSystemData.assets.scripts) fileSystemData.assets.scripts = {};
+        if (!fileSystemData.assets.textures) fileSystemData.assets.textures = {};
 
-        const encodedFileSystem = encodeFileSystem(JSON.parse(JSON.stringify(fileSystemData))); // Deep copy e encode
+        // Assegura que o script do mundo ativo esteja no fileSystem ANTES de serializar
+        const activeWorldFileName = activeWorldPathArray.length > 0 ? activeWorldPathArray[activeWorldPathArray.length - 1] : 'mundo_padrao.js';
+        const activeWorldKeyForFs = forFirebase ? this._firebaseEncodeKey(activeWorldFileName) : activeWorldFileName;
+        
+        let mundosFolder = fileSystemData.assets.mundos;
+        if (forFirebase) { // Para firebase, todas as chaves na hierarquia são codificadas
+             let currentFsLevel = fileSystemData;
+             activeWorldPathArray.slice(0, -1).forEach(part => {
+                 const encodedPart = this._firebaseEncodeKey(part);
+                 if (!currentFsLevel[encodedPart]) currentFsLevel[encodedPart] = {};
+                 currentFsLevel = currentFsLevel[encodedPart];
+             });
+             mundosFolder = currentFsLevel;
+        }
+
+
+        if (!mundosFolder[activeWorldKeyForFs] || typeof mundosFolder[activeWorldKeyForFs] !== 'object') {
+             mundosFolder[activeWorldKeyForFs] = {};
+        }
+        mundosFolder[activeWorldKeyForFs].type = 'script';
+        mundosFolder[activeWorldKeyForFs].content = activeWorldScriptContent; // Conteúdo RAW será codificado por processFileSystem
+        // A Data URL não precisa ser gerada aqui, pois processFileSystem cuidará disso.
+
+
+        const processedFileSystem = processFileSystem(JSON.parse(JSON.stringify(fileSystemData)), forFirebase);
 
         const projectData = {
-            motorMonkeyProject: true,
-            version: "1.1", 
-            sceneScript: encodeString(sceneScriptContent), // Codifica o script da cena
-            sceneScriptEncoded: true, // Flag para indicar que o script está codificado
-            fileSystem: encodedFileSystem, // FileSystem com URLs e conteúdos codificados
-            backgroundConfig: backgroundConfig,
-            gravity: gravity,
-            renderSettings: {
-                sombrasHabilitadas: shadowsEnabled,
-                tipoSombra: shadowMapType,
-                toneMappingHabilitado: toneMappingEnabled,
-                exposicaoToneMapping: toneMappingExposure,
-                pixelRatio: pixelRatio,
-                shadowMapSize: shadowMapSize
-            },
-            fogConfig: fogConfig
+            // sceneScript: encodeString(activeWorldScriptContent), // Script do mundo ativo está no fileSystem agora
+            fileSystem: processedFileSystem, 
+            sceneSettings: this._getSceneSettings(), 
+            activeWorldPath: activeWorldPathArray.map(p => forFirebase ? this._firebaseEncodeKey(p) : p) 
         };
 
-        // Stringify o objeto de dados. JSON.stringify por padrão escapa aspas e outros caracteres especiais.
-        // O resultado será inserido dentro de um template literal (`), então precisamos ter certeza de que
-        // NENHUM backtick (`) apareça no JSON sem ser escapado.
-        let jsonString = JSON.stringify(projectData, null, 2);
-        // Escapa backticks que podem ter vindo de algum lugar (embora encodeURIComponent+btoa já cuide de muitos)
-        jsonString = jsonString.replace(/`/g, '\\`');
+        if (forFirebase) { 
+            return projectData; 
+        } else { 
+            let jsonString = JSON.stringify(projectData, null, 2);
+            jsonString = jsonString.replace(/`/g, '\\`'); 
+            return `window.motorMonkeyProjectData = JSON.parse(\`${jsonString}\`);`;
+        }
+    }
 
-        return `// Motor Monkey Project File (Version ${projectData.version})
-// Este arquivo contém a cena e os recursos do seu projeto Motor Monkey.
-// Não edite manualmente este arquivo, a menos que você saiba o que está fazendo.
 
-// Define uma variável global para armazenar os dados do projeto.
-// Isso permite que o código JavaScript do Motor Monkey os carregue após a execução deste script.
-window.motorMonkeyProjectData = JSON.parse(\`
-${jsonString}
-\`);
-`;
+    aplicarDadosDoProjeto(loadedProjectData, aceEditorInstance, fileSystemInstance, setActiveWorldPathCallback) {
+        const decodeString = (encodedStr) => encodedStr ? decodeURIComponent(atob(encodedStr)) : null;
+
+        const decodeFileSystem = (node, decodeKeys) => {
+            const decodedNode = {};
+            for (const key in node) {
+                if (node.hasOwnProperty(key)) {
+                    const value = node[key];
+                    const newKey = decodeKeys ? this._firebaseDecodeKey(key) : key;
+
+                    if (typeof value === 'object' && value !== null && !value.type) { 
+                        decodedNode[newKey] = decodeFileSystem(value, decodeKeys);
+                    } else if (typeof value === 'object' && value !== null && value.type) { 
+                        decodedNode[newKey] = { ...value }; 
+                        if (decodedNode[newKey].url && typeof decodedNode[newKey].url === 'string') {
+                            decodedNode[newKey].url = decodeString(decodedNode[newKey].url);
+                        }
+                        if (decodedNode[newKey].content && typeof decodedNode[newKey].content === 'string') {
+                            decodedNode[newKey].content = decodeString(decodedNode[newKey].content);
+                        }
+                    } else { 
+                        decodedNode[newKey] = value;
+                    }
+                }
+            }
+            return decodedNode;
+        };
+
+        // 1. Limpar e restaurar fileSystem
+        for (const key in fileSystemInstance) { 
+            if (fileSystemInstance.hasOwnProperty(key)) {
+                delete fileSystemInstance[key];
+            }
+        }
+        Object.assign(fileSystemInstance, decodeFileSystem(loadedProjectData.fileSystem || { 'assets': { 'textures': {}, 'scripts': {}, 'mundos': {} } }, true)); 
+        
+        // 2. Definir o mundo ativo e carregar seu script no Ace Editor
+        let finalActiveWorldPath = ['assets', 'mundos', 'mundo_padrao.js']; // Padrão
+        if (loadedProjectData.activeWorldPath && loadedProjectData.activeWorldPath.length > 0) {
+            finalActiveWorldPath = loadedProjectData.activeWorldPath.map(p => this._firebaseDecodeKey(p));
+        }
+        
+        // Garante que as pastas do activeWorldPath existam no fileSystemInstance
+        let currentFsLevel = fileSystemInstance;
+        for(let i = 0; i < finalActiveWorldPath.length -1; i++) {
+            const pathPart = finalActiveWorldPath[i]; // Usa nome decodificado para navegar
+            if (!currentFsLevel[pathPart]) {
+                currentFsLevel[pathPart] = {}; // Cria a pasta se não existir
+            }
+            currentFsLevel = currentFsLevel[pathPart];
+        }
+
+        const activeWorldFileName = finalActiveWorldPath[finalActiveWorldPath.length - 1];
+        const activeWorldFileEntry = currentFsLevel ? currentFsLevel[activeWorldFileName] : null; // Usa nome decodificado para buscar
+        
+        if (activeWorldFileEntry && activeWorldFileEntry.type === 'script' && typeof activeWorldFileEntry.content === 'string') {
+            aceEditorInstance.setValue(activeWorldFileEntry.content, -1);
+        } else {
+            console.warn("Nenhum script de mundo ativo encontrado para carregar no editor. Carregando script padrão.");
+            const defaultScriptContent = `// Mundo Padrão - Motor Monkey\n\nconsole.log("Mundo Padrão Carregado!");\n`;
+            aceEditorInstance.setValue(defaultScriptContent, -1);
+            const defaultWorldDecodedKey = 'mundo_padrao.js';
+            if (!fileSystemInstance.assets.mundos[defaultWorldDecodedKey]) {
+                 fileSystemInstance.assets.mundos[defaultWorldDecodedKey] = { type: 'script', content: defaultScriptContent, url: '' };
+            }
+            finalActiveWorldPath = ['assets','mundos', defaultWorldDecodedKey];
+        }
+        setActiveWorldPathCallback(finalActiveWorldPath); 
+
+
+        // 3. Aplicar configurações de cena
+        const sceneSettings = loadedProjectData.sceneSettings;
+        if (sceneSettings) {
+            if (sceneSettings.gravity) { 
+                this.configurarGravidade(...sceneSettings.gravity);
+            }
+            if (sceneSettings.fogConfig) { 
+                this.configurarNeblina(sceneSettings.fogConfig);
+            }
+            if (sceneSettings.backgroundConfig) { 
+                const envMapNameDecoded = sceneSettings.backgroundConfig.environmentMapName;
+                // Procura a textura no fileSystem usando a chave decodificada
+                const envMapFile = (envMapNameDecoded && envMapNameDecoded !== 'Nenhuma') ? 
+                                   fileSystemInstance.assets?.textures?.[envMapNameDecoded] : 
+                                   null; 
+                
+                this.configurarFundoCena({ 
+                    color: sceneSettings.backgroundConfig.color, 
+                    environmentMap: envMapFile ? envMapFile.url : null 
+                });
+            }
+            if (sceneSettings.renderSettings) {
+                this.aplicarConfiguracoesDeRenderizacao(sceneSettings.renderSettings);
+            }
+        }
     }
 }
