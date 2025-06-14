@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
@@ -12,8 +11,41 @@
     <script src="https://unpkg.com/three@0.128.0/examples/js/controls/TransformControls.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.12/ace.js" type="text/javascript" charset="utf-8"></script>
     <script src="https://unpkg.com/cannon@0.6.2/build/cannon.min.js"></script>
-    <!-- Nova Dependência para Carregamento de HDRIs -->
+    <!-- Dependência para Carregamento de HDRIs -->
     <script src="https://unpkg.com/three@0.128.0/examples/js/loaders/RGBELoader.js"></script>
+
+    <!-- Firebase SDKs -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-app.js";
+        import { getAnalytics } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-analytics.js";
+        import { getDatabase, ref, set, get, child, onValue } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-database.js"; 
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyAKfOel4jvdoi01LTSpf2HW5HYEhwQPq7k",
+            authDomain: "engine-e21ab.firebaseapp.com",
+            databaseURL: "https://engine-e21ab-default-rtdb.firebaseio.com",
+            projectId: "engine-e21ab",
+            storageBucket: "engine-e21ab.firebasestorage.app",
+            messagingSenderId: "458424557162",
+            appId: "1:458424557162:web:d7e3226d4475c4895c3413",
+            measurementId: "G-QEEJE4Z7XH"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const analytics = getAnalytics(app); 
+        const database = getDatabase(app); 
+
+        window.firebaseRefs = {
+            getDatabase: getDatabase,
+            ref: ref,
+            set: set,
+            get: get,
+            child: child,
+            onValue: onValue 
+        };
+        console.log("Firebase (Info): SDKs inicializados e database disponível via window.firebaseRefs.");
+    </script>
+
     <script src="MotorJM.js"></script>
 
     <style>
@@ -42,11 +74,10 @@
             flex-direction: column; 
             height: 100vh; 
             width: 100vw;
-            /* NOVO: Impede seleção de texto */
-            -webkit-user-select: none;  /* Safari */
-            -moz-user-select: none;     /* Firefox */
-            -ms-user-select: none;      /* IE 10+ */
-            user-select: none;          /* Standard syntax */
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
         }
         #main-toolbar { display: flex; align-items: center; background-color: var(--cor-painel); padding: 8px 10px; border-bottom: 1px solid var(--cor-borda); gap: 10px; overflow-x: auto; white-space: nowrap; flex-shrink: 0; scrollbar-width: none; -ms-overflow-style: none; }
         #main-toolbar::-webkit-scrollbar { display: none; }
@@ -58,14 +89,65 @@
         #main-content-container { display: flex; flex-direction: column; flex-grow: 1; overflow: hidden; padding: 10px; box-sizing: border-box; }
         #cena-3d { flex-grow: 1; background-color: #111; border: 1px solid var(--cor-borda); border-radius: 4px; overflow: hidden; position: relative; margin-bottom: 10px; min-height: 250px; }
         #cena-3d canvas { display: block; width: 100%; height: 100%; }
-        #left-panel, #right-panel { background-color: var(--cor-painel); border: 1px solid var(--cor-borda); border-radius: 4px; padding: 10px; box-sizing: border-box; display: none; flex-direction: column; gap: 10px; height: auto; }
-        #left-panel { width: 150px; flex-shrink: 0; }
-        #right-panel { width: 300px; flex-shrink: 0; }
-        #left-panel h4, #right-panel h4 { margin-top: 0; margin-bottom: 10px; color: var(--cor-texto); border-bottom: 1px solid var(--cor-borda); padding-bottom: 5px; }
+        
+        #left-panel { background-color: var(--cor-painel); border: 1px solid var(--cor-borda); border-radius: 4px; padding: 10px; box-sizing: border-box; display: none; flex-direction: column; gap: 10px; height: auto; width: 150px; flex-shrink: 0; }
+        #right-panel-container { /* NOVO Container para right-panel e file-manager-panel */
+            background-color: var(--cor-painel); 
+            border: 1px solid var(--cor-borda); 
+            border-radius: 4px; 
+            padding: 0; /* Padding agora nos filhos */
+            box-sizing: border-box; 
+            display: none; /* Escondido por padrão em mobile */
+            flex-direction: column; 
+            width: 300px; 
+            flex-shrink: 0;
+            height: auto; /* Ou altura específica se necessário */
+        }
+        .panel-tabs {
+            display: flex;
+            border-bottom: 1px solid var(--cor-borda);
+        }
+        .panel-tabs button {
+            flex-grow: 1;
+            background-color: var(--cor-botao-normal);
+            color: white;
+            border: none;
+            padding: 8px 10px;
+            cursor: pointer;
+            font-size: 0.9em;
+            transition: background-color 0.2s;
+            border-radius: 0; /* Remove borda arredondada para abas */
+        }
+        .panel-tabs button:first-child { border-top-left-radius: 3px; }
+        .panel-tabs button:last-child { border-top-right-radius: 3px; }
+        .panel-tabs button:hover { background-color: var(--cor-botao-hover); }
+        .panel-tabs button.ativo { background-color: var(--cor-botao-ativo); }
+
+        #right-panel, #file-manager-panel { /* Ajustes para os painéis internos */
+            padding: 10px; /* Mantém o padding interno */
+            border: none; /* Remove bordas individuais, pois o container tem */
+            border-radius: 0; /* Remove bordas arredondadas */
+            flex-grow: 1; /* Para ocupar o espaço do container */
+            overflow-y: auto; /* Permite scroll interno */
+        }
+
+
+        #left-panel h4, #right-panel h4, #file-manager-panel h4 { margin-top: 0; margin-bottom: 10px; color: var(--cor-texto); border-bottom: 1px solid var(--cor-borda); padding-bottom: 5px; }
+        
+        /* Hierarquia de Objetos */
         #object-hierarchy { list-style: none; padding: 0; margin: 0; overflow-y: auto; flex-grow: 1; }
-        #object-hierarchy li { padding: 5px; cursor: pointer; border-radius: 3px; margin-bottom: 2px; transition: background-color 0.1s; font-size: 0.9em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        #object-hierarchy li { padding: 3px 5px; cursor: pointer; border-radius: 3px; margin-bottom: 1px; display: flex; align-items: center; font-size: 0.9em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         #object-hierarchy li:hover { background-color: var(--cor-botao-hover); }
         #object-hierarchy li.selected { background-color: var(--cor-botao-ativo); font-weight: bold; }
+        #object-hierarchy li .hierarchy-toggle { 
+            width: 15px; height: 15px; margin-right: 3px; display: inline-flex; align-items: center; justify-content: center;
+            font-size: 0.7em; color: #ccc;
+        }
+        #object-hierarchy li .hierarchy-toggle.empty { visibility: hidden; }
+        #object-hierarchy ul { list-style: none; padding-left: 15px; margin: 0; }
+        #object-hierarchy li > i { margin-right: 5px; }
+
+
         #object-properties { flex-grow: 1; overflow-y: auto; padding-right: 5px; margin-bottom: 10px; }
         #object-properties label { display: block; margin-bottom: 5px; font-size: 0.9em; font-weight: bold; }
         #object-properties input[type="text"], #object-properties input[type="number"], #object-properties input[type="color"], #object-properties select { width: calc(100% - 12px); padding: 8px; margin-bottom: 10px; border: 1px solid #555; background-color: var(--cor-borda); color: var(--cor-texto); border-radius: 4px; font-size: 0.9em; box-sizing: border-box; }
@@ -112,35 +194,17 @@
         #settings-fog-enabled, #prop-physics-enabled { width: auto; margin-left: 5px; vertical-align: middle; }
 
         /* Estilos para o Gerenciador de Arquivos */
-        #file-manager-panel {
-            background-color: var(--cor-painel);
-            border: 1px solid var(--cor-borda);
-            border-radius: 4px;
-            padding: 10px;
-            box-sizing: border-box;
-            display: none; /* Escondido por padrão */
+        #file-manager-panel { /* Ajustado para ser filho do container */
+            display: none; /* Escondido por padrão, controlado por JS */
             flex-direction: column;
             gap: 10px;
-            width: 300px; /* Largura padrão */
-            flex-shrink: 0;
-            position: absolute; /* Posição para sobrepor o Three.js */
-            top: 10px;
-            right: 10px;
-            height: calc(100% - 20px); /* Ocupa a altura total do container principal */
-            z-index: 500; /* Acima da cena 3D, abaixo de modais */
+            flex-grow: 1;
+            overflow-y: auto;
         }
         #file-manager-panel.visivel {
             display: flex;
         }
-        #file-manager-panel h4 {
-            margin-top: 0; margin-bottom: 10px; color: var(--cor-texto); border-bottom: 1px solid var(--cor-borda); padding-bottom: 5px;
-        }
-        #file-manager-controls {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 5px;
-            margin-bottom: 10px;
-        }
+        /* ... (restante dos estilos do file-manager) ... */
         #file-manager-controls button {
             background-color: var(--cor-botao-normal);
             color: white;
@@ -230,28 +294,109 @@
         .context-menu button:hover {
             background-color: var(--cor-botao-hover);
         }
+        #modal-save-firebase, #modal-load-firebase, #modal-input {
+            z-index: 1010; 
+        }
+        #modal-load-firebase .project-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            max-height: 250px;
+            overflow-y: auto;
+            border: 1px solid var(--cor-borda);
+            border-radius: 4px;
+            background-color: #2a2a2a;
+            margin-bottom: 15px;
+        }
+        #modal-load-firebase .project-list li {
+            padding: 8px 10px;
+            border-bottom: 1px solid #3a3a3a;
+            cursor: pointer;
+            transition: background-color 0.1s;
+        }
+        #modal-load-firebase .project-list li:last-child {
+            border-bottom: none;
+        }
+        #modal-load-firebase .project-list li:hover {
+            background-color: var(--cor-botao-hover);
+        }
+        #modal-load-firebase .project-list li.selected {
+            background-color: var(--cor-botao-ativo);
+            font-weight: bold;
+        }
+        #modal-load-firebase .project-list li span.date {
+            font-size: 0.8em;
+            color: #aaa;
+            float: right;
+        }
+
+        /* NOVOS Estilos para controles no canvas */
+        #canvas-controls-toolbar {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background-color: rgba(51, 51, 51, 0.8);
+            padding: 5px;
+            border-radius: 4px;
+            display: none; /* Escondido por padrão, visível quando objeto selecionado */
+            z-index: 10;
+        }
+        #canvas-controls-toolbar button {
+            background-color: var(--cor-botao-normal);
+            color: white;
+            border: none;
+            padding: 6px 8px;
+            cursor: pointer;
+            border-radius: 3px;
+            font-size: 0.9em;
+            margin: 2px;
+            transition: background-color 0.2s;
+        }
+        #canvas-controls-toolbar button:hover {
+            background-color: var(--cor-botao-hover);
+        }
+        #canvas-controls-toolbar button.ativo {
+            background-color: var(--cor-botao-ativo);
+        }
+        #canvas-delete-button {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            background-color: rgba(220, 53, 69, 0.8); /* Vermelho */
+            color: white;
+            border: none;
+            width: 35px;
+            height: 35px;
+            border-radius: 50%;
+            display: none; /* Escondido por padrão */
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            z-index: 10;
+            font-size: 1.1em;
+        }
+        #canvas-delete-button:hover {
+            background-color: rgba(200, 33, 49, 1);
+        }
 
 
         @media (min-width: 768px) {
             #main-content-container { flex-direction: row; align-items: stretch; justify-content: space-between; }
             #left-panel { display: flex; width: 180px; margin-right: 10px; }
-            #right-panel { display: flex; width: 300px; margin-left: 0; }
-            #cena-3d { margin-left: 0; margin-right: 10px; margin-bottom: 0; }
+             #right-panel-container { /* Ajuste para desktop */
+                display: flex; 
+                width: 300px; 
+                margin-left: 0; 
+                order: 2; /* Ordem para aparecer depois da cena */
+            }
+            #cena-3d { margin-left: 0; margin-right: 10px; margin-bottom: 0; order: 1;}
             
             #codigo-editor-container { width: 60vw; height: 70vh; }
             #bottom-panel { height: var(--altura-console-desktop); }
-
-            #file-manager-panel {
-                position: static; /* Volta para layout flexbox normal */
-                height: auto; /* Deixa o flexbox gerenciar a altura */
-                margin-left: 10px; /* Alinha ao lado do right-panel */
-                width: 300px; /* Largura para desktop */
-                order: 3; /* Ordem para aparecer depois da cena e right-panel */
-            }
         }
     </style>
 </head>
-<body oncontextmenu="return false;"> <!-- NOVO: Desabilita o menu de contexto padrão globalmente -->
+<body oncontextmenu="return false;"> 
     <div id="main-toolbar">
         <span class="logo">Motor Monkey</span>
         <button id="btn-toggle-animation" title="Play/Stop Simulação"><i class="fas fa-play"></i></button>
@@ -259,42 +404,51 @@
         <button id="btn-add-object" title="Adicionar Objeto"><i class="fas fa-plus"></i> Adicionar</button>
         <button id="btn-open-settings" title="Configurações da Cena"><i class="fas fa-cog"></i></button>
         <button id="btn-toggle-script-editor" title="Editor de Script"><i class="fas fa-code"></i></button>
-        <button id="btn-recompile-script" title="Recarregar Script"><i class="fas fa-sync-alt"></i> Recarregar</button>
+        <button id="btn-recompile-world" title="Recarregar Mundo Ativo"><i class="fas fa-sync-alt"></i> Recarregar Mundo</button> 
         <button id="btn-generate-script" title="Gerar Script da Cena"><i class="fas fa-file-code"></i></button>
-        <button id="btn-save-project" title="Salvar Projeto Completo"><i class="fas fa-file-export"></i> Salvar Projeto</button> <!-- NOVO BOTÃO -->
-        <input type="file" id="load-project-input" accept=".js" style="display:none;"> <!-- NOVO INPUT FILE -->
-        <button id="btn-load-project" title="Carregar Projeto"><i class="fas fa-file-import"></i> Carregar Projeto</button> <!-- NOVO BOTÃO -->
-        <button id="btn-toggle-file-manager" title="Gerenciador de Arquivos"><i class="fas fa-folder"></i> Arquivos</button> 
-        <div style="margin-left:auto;"></div>
-        <button id="btn-modo-translate" title="Mover (T)" class="ativo"><i class="fas fa-arrows-alt"></i></button>
-        <button id="btn-modo-rotate" title="Rotacionar (R)"><i class="fas fa-sync-alt"></i></button>
-        <button id="btn-modo-scale" title="Escalar (S)"><i class="fas fa-expand-alt"></i></button>
+        
+        <button id="btn-save-firebase" title="Salvar Projeto na Nuvem"><i class="fas fa-cloud-upload-alt"></i> Salvar Nuvem</button>
+        <button id="btn-load-firebase" title="Carregar Projeto da Nuvem"><i class="fas fa-cloud-download-alt"></i> Carregar Nuvem</button>
     </div>
 
     <div id="main-content-container">
         <div id="left-panel">
             <h4><i class="fas fa-sitemap"></i> Hierarquia</h4>
             <ul id="object-hierarchy"></ul>
-        </div>
-        <div id="cena-3d"></div>
-        <div id="right-panel">
-            <h4><i class="fas fa-sliders-h"></i> Propriedades</h4>
-            <div id="object-properties"><p>Selecione um objeto para ver suas propriedades.</p></div>
-        </div>
-        <!-- NOVO PAINEL DO GERENCIADOR DE ARQUIVOS -->
-        <div id="file-manager-panel">
-            <h4><i class="fas fa-folder-open"></i> Gerenciador de Arquivos</h4>
-            <div id="file-manager-controls">
-                <button id="btn-new-folder" title="Nova Pasta"><i class="fas fa-folder-plus"></i> Nova Pasta</button>
-                <input type="file" id="file-upload-input" multiple style="display:none;">
-                <button id="btn-upload-file" title="Upload de Arquivo"><i class="fas fa-upload"></i> Upload</button>
-                <button id="btn-delete-file" title="Excluir"><i class="fas fa-trash"></i> Excluir</button>
-                <button id="btn-rename-file" title="Renomear"><i class="fas fa-edit"></i> Renomear</button>
-                <button id="btn-back-folder" title="Voltar"><i class="fas fa-arrow-left"></i> Voltar</button>
+            <div id="object-hierarchy-context-menu" class="context-menu">
+                <button id="ctx-set-parent"><i class="fas fa-link"></i> Definir como Pai de...</button>
+                <button id="ctx-remove-parent"><i class="fas fa-unlink"></i> Tornar Raiz</button>
             </div>
-            <div id="file-path-display">/</div>
-            <div id="file-tree-container">
-                <ul id="file-tree"></ul>
+        </div>
+        <div id="cena-3d">
+            <div id="canvas-controls-toolbar">
+                <button id="btn-modo-translate" title="Mover (T)" class="ativo"><i class="fas fa-arrows-alt"></i></button>
+                <button id="btn-modo-rotate" title="Rotacionar (R)"><i class="fas fa-sync-alt"></i></button>
+                <button id="btn-modo-scale" title="Escalar (S)"><i class="fas fa-expand-alt"></i></button>
+            </div>
+            <button id="canvas-delete-button" title="Remover Objeto Selecionado"><i class="fas fa-trash-alt"></i></button>
+        </div>
+        <!-- NOVO CONTAINER PARA PAINEL DIREITO E GERENCIADOR DE ARQUIVOS -->
+        <div id="right-panel-container">
+            <div class="panel-tabs">
+                <button id="btn-tab-properties" class="ativo"><i class="fas fa-sliders-h"></i> Propriedades</button>
+                <button id="btn-tab-files"><i class="fas fa-folder-open"></i> Arquivos</button>
+            </div>
+            <div id="right-panel"> <!-- Mantém ID para compatibilidade, mas agora é filho do container -->
+                <!-- <h4> removido daqui, agora é dinâmico -->
+                <div id="object-properties"><p>Selecione um objeto para ver suas propriedades.</p></div>
+            </div>
+            <div id="file-manager-panel"> <!-- Agora também é filho do container -->
+                <!-- <h4> removido daqui -->
+                <div id="file-manager-controls">
+                    <input type="file" id="file-upload-input" multiple style="display:none;">
+                    <button id="btn-upload-file" title="Upload de Arquivo"><i class="fas fa-upload"></i> Upload</button>
+                    <button id="btn-back-folder" title="Voltar"><i class="fas fa-arrow-left"></i> Voltar</button>
+                </div>
+                <div id="file-path-display">/</div>
+                <div id="file-tree-container"> 
+                    <ul id="file-tree"></ul>
+                </div>
             </div>
         </div>
     </div>
@@ -420,11 +574,58 @@
     
     <!-- Context Menu para o Gerenciador de Arquivos -->
     <div id="file-context-menu" class="context-menu">
+        <button id="ctx-new-folder"><i class="fas fa-folder-plus"></i> Nova Pasta Aqui</button>
+        <button id="ctx-new-world"><i class="fas fa-globe"></i> Novo Mundo Aqui</button>
         <button id="ctx-apply-texture"><i class="fas fa-brush"></i> Aplicar como Textura</button>
-        <button id="ctx-load-script"><i class="fas fa-code"></i> Carregar como Script</button>
+        <button id="ctx-open-world"><i class="fas fa-globe-americas"></i> Abrir Mundo</button>
         <button id="ctx-rename-file"><i class="fas fa-edit"></i> Renomear</button>
         <button id="ctx-delete-file"><i class="fas fa-trash-alt"></i> Excluir</button>
     </div>
+
+    <!-- MODAL PARA SALVAR NO FIREBASE -->
+    <div id="modal-save-firebase" class="modal-overlay">
+        <div class="modal-conteudo">
+            <h3>Salvar Projeto na Nuvem</h3>
+            <label for="firebase-project-id">ID do Projeto:</label>
+            <input type="text" id="firebase-project-id" placeholder="Ex: meu_jogo_01">
+            <p style="font-size: 0.8em; color: #ccc;">Apenas letras, números, hífens e underscores.</p>
+            <div class="modal-botoes">
+                <button id="btn-cancel-save-firebase">Cancelar</button>
+                <button id="btn-confirm-save-firebase">Salvar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL PARA CARREGAR DO FIREBASE -->
+    <div id="modal-load-firebase" class="modal-overlay">
+        <div class="modal-conteudo">
+            <h3>Carregar Projeto da Nuvem</h3>
+            <p>Selecione um projeto para carregar:</p>
+            <ul class="project-list" id="firebase-project-list">
+                <!-- Projetos serão listados aqui -->
+                <li>Nenhum projeto encontrado.</li>
+            </ul>
+            <div class="modal-botoes">
+                <button id="btn-cancel-load-firebase">Cancelar</button>
+                <button id="btn-confirm-load-firebase" disabled>Carregar Selecionado</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL PARA INPUT DE NOME -->
+    <div id="modal-input" class="modal-overlay">
+        <div class="modal-conteudo">
+            <h3 id="modal-input-title">Digite um nome</h3>
+            <label for="modal-input-value" id="modal-input-label">Nome:</label>
+            <input type="text" id="modal-input-value" placeholder="Nome do item">
+            <p id="modal-input-hint" style="font-size: 0.8em; color: #ccc;"></p>
+            <div class="modal-botoes">
+                <button id="btn-cancel-input-modal">Cancelar</button>
+                <button id="btn-confirm-input-modal">Confirmar</button>
+            </div>
+        </div>
+    </div>
+
 
     <script>
     document.addEventListener('DOMContentLoaded', () => {
@@ -433,17 +634,20 @@
         let objetoSelecionadoId = null;
         let isPlaying = false;
         let currentConsoleFilter = 'all';
+        let isPickingChild = false; 
+        let prospectiveParentId = null; 
 
-        // Variáveis do Gerenciador de Arquivos
-        // NOVO: A estrutura do fileSystem agora é global e será salva/carregada
         const fileSystem = {
             'assets': {
                 'textures': {},
-                'scripts': {}
+                'scripts': {},
+                'mundos': {}
             }
         }; 
-        let currentPath = []; // Caminho atual no file system (ex: ['assets', 'textures'])
-        let selectedFileElement = null; // O <li> do arquivo/pasta selecionado na UI
+        let currentPath = []; 
+        let selectedFileElement = null; 
+        let selectedFirebaseProjectId = null; 
+        let activeWorldPath = ['assets', 'mundos', 'mundo_padrao.js']; 
 
         const ui = {
             btnToggleAnimation: document.getElementById('btn-toggle-animation'),
@@ -451,18 +655,29 @@
             btnAddObject: document.getElementById('btn-add-object'),
             btnOpenSettings: document.getElementById('btn-open-settings'),
             btnToggleScriptEditor: document.getElementById('btn-toggle-script-editor'),
-            btnRecompileScript: document.getElementById('btn-recompile-script'),
+            btnRecompileWorld: document.getElementById('btn-recompile-world'), 
             btnGenerateScript: document.getElementById('btn-generate-script'),
-            // NOVO: Botões para Salvar/Carregar Projeto
-            btnSaveProject: document.getElementById('btn-save-project'),
-            loadProjectInput: document.getElementById('load-project-input'),
-            btnLoadProject: document.getElementById('btn-load-project'),
             
+            btnSaveFirebase: document.getElementById('btn-save-firebase'),
+            btnLoadFirebase: document.getElementById('btn-load-firebase'),
+
+            // BOTÕES DE TRANSFORMAÇÃO NO CANVAS
+            canvasControlsToolbar: document.getElementById('canvas-controls-toolbar'),
             btnModoTranslate: document.getElementById('btn-modo-translate'),
             btnModoRotate: document.getElementById('btn-modo-rotate'),
             btnModoScale: document.getElementById('btn-modo-scale'),
+            canvasDeleteButton: document.getElementById('canvas-delete-button'),
+
             objectHierarchy: document.getElementById('object-hierarchy'),
+            objectHierarchyContextMenu: document.getElementById('object-hierarchy-context-menu'), 
+            ctxSetParent: document.getElementById('ctx-set-parent'), 
+            ctxRemoveParent: document.getElementById('ctx-remove-parent'), 
             objectProperties: document.getElementById('object-properties'),
+            rightPanelContainer: document.getElementById('right-panel-container'), // NOVO
+            btnTabProperties: document.getElementById('btn-tab-properties'),       // NOVO
+            btnTabFiles: document.getElementById('btn-tab-files'),                 // NOVO
+            rightPanel: document.getElementById('right-panel'),                    // NOVO
+
             bottomPanel: document.getElementById('bottom-panel'),
             consoleOutput: document.getElementById('console-output'),
             codigoEditorContainer: document.getElementById('codigo-editor-container'),
@@ -489,53 +704,88 @@
             btnLoadEnvironmentMap: document.getElementById('btn-load-environment-map'),
             btnClearEnvironmentMap: document.getElementById('btn-clear-environment-map'),
 
-            btnToggleFileManager: document.getElementById('btn-toggle-file-manager'),
+            // btnToggleFileManager: document.getElementById('btn-toggle-file-manager'), // REMOVIDO
             fileManagerPanel: document.getElementById('file-manager-panel'),
-            btnNewFolder: document.getElementById('btn-new-folder'),
             fileUploadInput: document.getElementById('file-upload-input'),
             btnUploadFile: document.getElementById('btn-upload-file'),
-            btnDeleteFile: document.getElementById('btn-delete-file'),
-            btnRenameFile: document.getElementById('btn-rename-file'),
             btnBackFolder: document.getElementById('btn-back-folder'),
             filePathDisplay: document.getElementById('file-path-display'),
             fileTree: document.getElementById('file-tree'),
+            fileTreeContainer: document.getElementById('file-tree-container'), 
             fileContextMenu: document.getElementById('file-context-menu'),
+            ctxNewFolder: document.getElementById('ctx-new-folder'),       
+            ctxNewWorld: document.getElementById('ctx-new-world'),         
             ctxApplyTexture: document.getElementById('ctx-apply-texture'),
-            ctxLoadScript: document.getElementById('ctx-load-script'),
+            ctxOpenWorld: document.getElementById('ctx-open-world'), 
             ctxRenameFile: document.getElementById('ctx-rename-file'),
-            ctxDeleteFile: document.getElementById('ctx-delete-file')
+            ctxDeleteFile: document.getElementById('ctx-delete-file'),
+
+            modalSaveFirebase: document.getElementById('modal-save-firebase'),
+            firebaseProjectIdInput: document.getElementById('firebase-project-id'),
+            btnCancelSaveFirebase: document.getElementById('btn-cancel-save-firebase'),
+            btnConfirmSaveFirebase: document.getElementById('btn-confirm-save-firebase'),
+
+            modalLoadFirebase: document.getElementById('modal-load-firebase'),
+            firebaseProjectList: document.getElementById('firebase-project-list'),
+            btnCancelLoadFirebase: document.getElementById('btn-cancel-load-firebase'),
+            btnConfirmLoadFirebase: document.getElementById('btn-confirm-load-firebase'),
+            
+            modalInput: document.getElementById('modal-input'),
+            modalInputTitle: document.getElementById('modal-input-title'),
+            modalInputLabel: document.getElementById('modal-input-label'),
+            modalInputValue: document.getElementById('modal-input-value'),
+            modalInputHint: document.getElementById('modal-input-hint'),
+            btnCancelInputModal: document.getElementById('btn-cancel-input-modal'),
+            btnConfirmInputModal: document.getElementById('btn-confirm-input-modal')
         };
+        let currentInputModalCallback = null; 
 
         function init() {
-            motor = new MotorJM('cena-3d');
+            motor = new MotorJM('cena-3d', fileSystem); 
             motor.iniciar();
             setupAceEditor();
             setupEventListeners();
-            // A recarga inicial agora usa o script padrão, não um projeto salvo
-            recarregarCena(true); 
+            createDefaultWorldIfNotExists();
+            loadWorldScriptToEditor(activeWorldPath); 
+            recarregarMundoAtivo(); 
             updateUI();
             logConsole('info', 'Editor inicializado. Bem-vindo ao Motor Monkey!');
             updateConsoleFilter('all');
             loadGraphicSettingsUI();
-            renderFileTree(); // Renderiza o gerenciador de arquivos inicialmente
+            renderFileTree(); 
+            showPropertiesPanel(); // Mostra o painel de propriedades por padrão
+        }
+        
+        function createDefaultWorldIfNotExists() {
+            const defaultWorldName = 'mundo_padrao.js';
+            let mundosFolder = getFolder(['assets', 'mundos']);
+            if (!mundosFolder) { 
+                 const assetsFolder = getFolder(['assets']);
+                 if (assetsFolder) {
+                    assetsFolder['mundos'] = {};
+                    mundosFolder = assetsFolder['mundos'];
+                 } else { 
+                    fileSystem['assets'] = { textures: {}, scripts: {}, mundos: {} };
+                    mundosFolder = fileSystem.assets.mundos;
+                 }
+            }
+
+            if (mundosFolder && !mundosFolder[defaultWorldName]) {
+                // Cena inicial vazia
+                const defaultScriptContent = `// Mundo Padrão - Motor Monkey\nconsole.log("Mundo Padrão Carregado!");\n`;
+                mundosFolder[defaultWorldName] = {
+                    type: 'script',
+                    content: defaultScriptContent,
+                    url: `data:application/javascript;base64,${btoa(encodeURIComponent(defaultScriptContent))}`
+                };
+                activeWorldPath = ['assets', 'mundos', defaultWorldName];
+            }
         }
 
         function setupAceEditor() {
             aceEditor = ace.edit('codigo-editor');
             aceEditor.setTheme("ace/theme/monokai");
             aceEditor.session.setMode("ace/mode/javascript");
-            const defaultScript = `// Bem-vindo ao Motor Monkey!\n// Use a API 'motor' para criar sua cena.\n\n` +
-                                  `motor.adicionarObjeto('chao', 'Chão', 'plano', { size: { w: 50, d: 50 }, material: { color: 'cinza' }, physics: { bodyType: 'static', mass: 0, friction: 0.8, restitution: 0.2, collisionShape: 'plane', linearDamping: 0.01, angularDamping: 0.01 } });\n` +
-                                  `motor.adicionarObjeto('caixa_vermelha', 'Cubo 1', 'caixa', { position: {x:0, y:5, z:0}, material: { color: 'vermelho', roughness: 0.8, metalness: 0.1 }, physics: { bodyType: 'dynamic', mass: 1, friction: 0.5, restitution: 0.5, collisionShape: 'box', linearDamping: 0.01, angularDamping: 0.01 } });\n` +
-                                  `motor.adicionarObjeto('esfera_azul', 'Esfera 1', 'esfera', { position: {x:2, y:8, z:1}, material: { color: 'azul', roughness: 0.1, metalness: 0.9 }, physics: { bodyType: 'dynamic', mass: 2, friction: 0.3, restitution: 0.8, collisionShape: 'sphere', linearDamping: 0.01, angularDamping: 0.01 } });\n` +
-                                  `motor.adicionarObjeto('camera_principal', 'Câmera do Jogo', 'camera', { position: {x:0, y:5, z:15}, rotation: {x:0, y:0, z:0}, fov: 75, near: 0.1, far: 1000 });\n`;
-            aceEditor.setValue(defaultScript, -1);
-            // NOVO: Adiciona o script padrão ao fileSystem como cena.js
-            fileSystem.assets.scripts['cena.js'] = {
-                type: 'script',
-                url: `data:application/javascript;base64,${btoa(encodeURIComponent(defaultScript))}`, // Data URL para consistência
-                content: defaultScript 
-            };
         }
 
         function logConsole(type, message) {
@@ -575,36 +825,35 @@
                 logConsole('warning', 'Nenhum log visível para copiar.');
             }
         }
-
-        function recarregarCena(isInitial = false) { 
+        
+        function recarregarMundoAtivo() { 
             if (isPlaying) togglePlayStop(); 
             try { 
                 motor.limparCena(); 
-                // A `userCode` agora recebe o script do Ace Editor
-                const currentSceneScript = aceEditor.getValue();
-                const userCode = new Function('motor', currentSceneScript); 
-                userCode(motor); 
-                if (!isInitial) logConsole('info', 'Cena recarregada com sucesso.'); 
+                const currentWorldScript = aceEditor.getValue(); 
+                motor.executeScript(currentWorldScript, activeWorldPath.join('/')); 
+                logConsole('info', `Mundo "${activeWorldPath.join('/')}" recarregado com sucesso.`); 
             } catch (e) { 
-                logConsole('error', `Erro ao executar script: ${e.message}`); 
+                logConsole('error', `Erro ao executar script do mundo: ${e.message}`); 
                 console.error(e); 
             } 
             updateHierarchy(); 
             updatePropertiesPanel(null); 
-            loadGraphicSettingsUI(); // Garante que as configurações de cena sejam aplicadas visualmente
+            loadGraphicSettingsUI(); 
         }
 
-        function togglePlayStop() { isPlaying = !isPlaying; const icon = ui.btnToggleAnimation.querySelector('i'); const leftPanel = document.getElementById('left-panel'); const rightPanel = document.getElementById('right-panel'); 
+        function togglePlayStop() { isPlaying = !isPlaying; const icon = ui.btnToggleAnimation.querySelector('i'); const leftPanel = document.getElementById('left-panel'); const rightPanelContainer = document.getElementById('right-panel-container'); 
             if (isPlaying) { 
                 motor.play(); 
                 icon.classList.replace('fa-play', 'fa-stop'); 
                 ui.btnToggleAnimation.title = "Parar Simulação"; 
-                [leftPanel, rightPanel, ui.fileManagerPanel].forEach(p => {p.style.pointerEvents = "none"; p.style.opacity = "0.5";}); // Desabilita o gerenciador também
+                [leftPanel, rightPanelContainer, ui.canvasControlsToolbar, ui.canvasDeleteButton].forEach(p => {if(p){p.style.pointerEvents = "none"; p.style.opacity = "0.5";}}); 
             } else { 
                 motor.parar(); 
                 icon.classList.replace('fa-stop', 'fa-play'); 
                 ui.btnToggleAnimation.title = "Iniciar Simulação"; 
-                [leftPanel, rightPanel, ui.fileManagerPanel].forEach(p => {p.style.pointerEvents = "auto"; p.style.opacity = "1";}); // Reabilita o gerenciador também
+                [leftPanel, rightPanelContainer, ui.canvasControlsToolbar, ui.canvasDeleteButton].forEach(p => {if(p){p.style.pointerEvents = "auto"; p.style.opacity = "1";}}); 
+                updateCanvasControlsVisibility(); 
             } 
         }
         function adicionarNovoObjeto() {
@@ -614,7 +863,7 @@
             const isLight = ['ambiente', 'direcional', 'ponto'].includes(type);
 
             if (isLight) {
-                motor.adicionarLuz(id, name, { type: type, color: '#ffffff', intensity: 1 });
+                motor.adicionarObjeto(id, name, { type: type, color: '#ffffff', intensity: 1 });
             } else if (type === 'camera') { 
                 motor.adicionarObjeto(id, name, 'camera', { position: {x:0, y:5, z:15}, fov: 75, near: 0.1, far: 1000 });
             }
@@ -629,193 +878,393 @@
         }
         function gerarESetarScript() { const script = motor.gerarScriptDaCena(); aceEditor.setValue(script, -1); logConsole('info', 'Script da cena atual gerado no editor.'); toggleScriptEditor(true); }
         
-        // NOVO: Função para Salvar o Projeto Completo como .js
-        function salvarProjetoCompleto() {
-            // Atualiza o conteúdo de 'cena.js' no fileSystem antes de salvar
-            fileSystem.assets.scripts['cena.js'] = {
-                type: 'script',
-                content: aceEditor.getValue(),
-                // Sempre cria uma Data URL para o script principal ao salvar, mesmo que não seja usada diretamente
-                url: `data:application/javascript;base64,${btoa(encodeURIComponent(aceEditor.getValue()))}` 
-            };
+        // --- FUNÇÕES DE SALVAMENTO/CARREGAMENTO FIREBASE ---
+        async function salvarProjetoFirebase() {
+            if (!window.firebaseRefs || !window.firebaseRefs.getDatabase) {
+                logConsole('error', 'Firebase Database não inicializado. Verifique a configuração.');
+                return;
+            }
 
-            const projectJsString = motor.gerarDadosDoProjeto(
-                aceEditor.getValue(), 
-                fileSystem, 
-                // Coleta todas as configurações globais da cena
-                motor.cena._backgroundConfig, 
-                motor.mundoFisica.gravity.toArray(),
-                motor.renderizador.shadowMap.enabled,
-                Object.keys(THREE).find(key => THREE[key] === motor.renderizador.shadowMap.type),
-                motor.renderizador.toneMapping !== THREE.NoToneMapping,
-                motor.renderizador.toneMappingExposure,
-                motor.renderizador.getPixelRatio(),
-                Object.values(motor.getObjetosNaCena()).find(o => o.threeObj.isDirectionalLight)?.threeObj?.shadow?.mapSize.width || 1024,
-                motor.cena.fog // Passa o objeto fog inteiro
-            );
-            
-            const blob = new Blob([projectJsString], { type: 'application/javascript;charset=utf-8' });
-            const link = document.createElement('a');
-            link.href = URL.createObjectURL(blob);
-            link.download = `motor_monkey_project_${Date.now()}.js`; // Salva como .js
-            link.click();
-            URL.revokeObjectURL(link.href);
-            logConsole('info', 'Projeto completo salvo como arquivo JavaScript.');
+            ui.firebaseProjectIdInput.value = ''; 
+            ui.firebaseProjectIdInput.focus(); 
+            toggleModal(ui.modalSaveFirebase, true);
         }
 
-        // NOVO: Função para Carregar um Projeto Completo a partir de um .js
-        function carregarProjetoCompleto(event) {
-            const file = event.target.files[0];
-            if (!file) return;
+        async function confirmSaveFirebase() {
+            const projectIdRaw = ui.firebaseProjectIdInput.value.trim();
+            const firebase = window.firebaseRefs; 
+            const projectId = motor._firebaseEncodeKey(projectIdRaw); 
 
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                try {
-                    // Cria um elemento script temporário para executar o JS do arquivo
-                    const scriptElement = document.createElement('script');
-                    // Usamos Blob URL para que o navegador execute o JS lido do arquivo
-                    const blob = new Blob([e.target.result], { type: 'application/javascript' });
-                    scriptElement.src = URL.createObjectURL(blob);
-                    
-                    scriptElement.onload = () => {
-                        if (window.motorMonkeyProjectData) {
-                            const loadedProject = window.motorMonkeyProjectData;
+            if (!projectId) {
+                logConsole('warning', 'Salvamento cancelado: ID do projeto não fornecido.');
+                toggleModal(ui.modalSaveFirebase, false);
+                return;
+            }
 
-                            // 1. Carregar o script da cena no Ace Editor
-                            if (loadedProject.sceneScript) {
-                                // Decodifica o script da cena (se foi codificado)
-                                const decodedSceneScript = loadedProject.sceneScriptEncoded ? 
-                                    decodeURIComponent(atob(loadedProject.sceneScript)) : loadedProject.sceneScript;
-                                aceEditor.setValue(decodedSceneScript, -1);
-                                logConsole('info', 'Script da cena carregado do projeto.');
-                            } else {
-                                logConsole('warning', 'Nenhum script de cena encontrado no projeto carregado.');
-                            }
+            logConsole('info', `Preparando para salvar projeto "${projectIdRaw}" no Firebase...`);
+            toggleModal(ui.modalSaveFirebase, false); 
 
-                            // 2. Carregar os arquivos no gerenciador de arquivos
-                            // Limpa o fileSystem atual antes de carregar o novo
-                            for (const key in fileSystem) { 
-                                if (fileSystem.hasOwnProperty(key)) {
-                                    delete fileSystem[key];
-                                }
-                            }
-                            // Copia a estrutura do sistema de arquivos carregado e decodifica conteúdos
-                            const decodedFileSystem = decodeFileSystem(loadedProject.fileSystem || { 'assets': { 'textures': {}, 'scripts': {} } });
-                            Object.assign(fileSystem, decodedFileSystem);
-                            currentPath = []; // Volta para a raiz
-                            renderFileTree();
-                            logConsole('info', 'Arquivos carregados no gerenciador.');
+            const activeWorldScriptContent = aceEditor.getValue();
+            const activeWorldFolder = getFolder(activeWorldPath.slice(0, -1)); 
+            if (activeWorldFolder) {
+                const activeWorldFileName = activeWorldPath[activeWorldPath.length - 1];
+                const encodedFileName = motor._firebaseEncodeKey(activeWorldFileName);
+                 activeWorldFolder[encodedFileName] = { 
+                    type: 'script',
+                    content: activeWorldScriptContent, 
+                    url: `data:application/javascript;base64,${btoa(encodeURIComponent(activeWorldScriptContent))}` 
+                };
+            }
 
-                            // 3. Aplicar configurações de cena (gravidade, neblina, fundo, renderização)
-                            if (loadedProject.gravity) { 
-                                motor.configurarGravidade(...loadedProject.gravity);
-                            }
-                            if (loadedProject.fogConfig) { 
-                                motor.configurarNeblina(loadedProject.fogConfig);
-                            }
-                            if (loadedProject.backgroundConfig) { 
-                                // O environmentMap agora é o Data URL já decodificado do fileSystem
-                                const envMapFile = fileSystem.assets.textures[loadedProject.backgroundConfig.environmentMapName];
-                                motor.configurarFundoCena({ 
-                                    color: loadedProject.backgroundConfig.color, 
-                                    environmentMap: envMapFile ? envMapFile.url : null 
-                                });
-                            } else {
-                                motor.configurarFundoCena({ color: '#1a1a1a', environmentMap: null });
-                            }
+            const projectData = motor.gerarDadosDoProjeto(aceEditor.getValue(), fileSystem, true, activeWorldPath); 
 
-                            // Configurações de renderização
-                            if (loadedProject.renderSettings) {
-                                motor.aplicarConfiguracoesDeRenderizacao(loadedProject.renderSettings);
-                            }
-                            loadGraphicSettingsUI(); // Atualiza a UI das configurações
-
-                            // 4. Recarregar a cena (isso executa o script do editor com os arquivos carregados)
-                            recarregarCena(); 
-                            logConsole('info', 'Projeto carregado com sucesso!');
-                        } else {
-                            logConsole('error', 'O arquivo .js carregado não contém os dados do projeto Motor Monkey (window.motorMonkeyProjectData não encontrado).');
-                        }
-                        // Limpa o script e a URL temporária
-                        document.head.removeChild(scriptElement);
-                        URL.revokeObjectURL(scriptElement.src);
-                        delete window.motorMonkeyProjectData; // Limpa a variável global
-                    };
-
-                    scriptElement.onerror = () => {
-                        logConsole('error', 'Falha ao carregar o arquivo JS do projeto. Verifique o console para erros de sintaxe no arquivo carregado.');
-                        document.head.removeChild(scriptElement);
-                        URL.revokeObjectURL(scriptElement.src);
-                    };
-
-                    document.head.appendChild(scriptElement);
-
-                } catch (error) {
-                    logConsole('error', `Erro ao processar o arquivo de projeto: ${error.message}`);
-                    console.error('Erro ao carregar projeto:', error);
-                }
-            };
-            reader.readAsText(file);
-            // Limpa o input para permitir carregar o mesmo arquivo novamente
-            ui.loadProjectInput.value = ''; 
-        }
-
-        // NOVO: Função para decodificar o fileSystem recursivamente
-        function decodeFileSystem(node) {
-            const decodedNode = {};
-            for (const key in node) {
-                if (node.hasOwnProperty(key)) {
-                    const value = node[key];
-                    if (typeof value === 'object' && value !== null && !value.type) { // É uma pasta
-                        decodedNode[key] = decodeFileSystem(value);
-                    } else if (typeof value === 'object' && value !== null && value.type) { // É um arquivo
-                        decodedNode[key] = { ...value }; // Copia as propriedades
-                        if (decodedNode[key].urlEncoded) {
-                            decodedNode[key].url = decodeURIComponent(atob(decodedNode[key].urlEncoded));
-                            delete decodedNode[key].urlEncoded;
-                        }
-                        if (decodedNode[key].contentEncoded) {
-                            decodedNode[key].content = decodeURIComponent(atob(decodedNode[key].contentEncoded));
-                            delete decodedNode[key].contentEncoded;
-                        }
-                    } else { // Outras propriedades (string, number, boolean)
-                        decodedNode[key] = value;
-                    }
+            try {
+                await firebase.set(firebase.ref(firebase.getDatabase(), 'projects/' + projectId), {
+                    lastUpdated: new Date().toISOString(), 
+                    projectContent: projectData 
+                });
+                logConsole('info', `Projeto "${projectIdRaw}" salvo no Firebase com sucesso!`);
+            } catch (error) {
+                logConsole('error', `Falha ao salvar o projeto "${projectIdRaw}" no Firebase: ${error.message}`);
+                console.error("Firebase (Erro Salvamento):", error);
+                if (error.code === 'PERMISSION_DENIED') {
+                    logConsole('error', 'Erro de permissão no Firebase. Verifique suas regras de segurança no console do Firebase.');
                 }
             }
-            return decodedNode;
+        }
+
+        async function carregarProjetoFirebase() {
+            const firebase = window.firebaseRefs;
+
+            if (!firebase || !firebase.getDatabase) {
+                logConsole('error', 'Firebase Database não inicializado. Verifique a configuração.');
+                return;
+            }
+            
+            ui.firebaseProjectList.innerHTML = '<li>Carregando projetos...</li>'; 
+            ui.btnConfirmLoadFirebase.disabled = true; 
+            selectedFirebaseProjectId = null; 
+
+            toggleModal(ui.modalLoadFirebase, true);
+
+            try {
+                const dbRef = firebase.ref(firebase.getDatabase());
+                const snapshot = await firebase.get(firebase.child(dbRef, 'projects'));
+                
+                ui.firebaseProjectList.innerHTML = ''; 
+                if (snapshot.exists()) {
+                    const projects = snapshot.val();
+                    let hasProjects = false;
+                    for (const id in projects) {
+                        const projectInfo = projects[id];
+                        const li = document.createElement('li');
+                        li.textContent = `${motor._firebaseDecodeKey(id)}`; 
+                        if (projectInfo.lastUpdated) {
+                            li.innerHTML += ` <span class="date">(${new Date(projectInfo.lastUpdated).toLocaleString()})</span>`;
+                        }
+                        li.dataset.projectId = id; 
+                        li.addEventListener('click', () => {
+                            Array.from(ui.firebaseProjectList.children).forEach(child => child.classList.remove('selected'));
+                            li.classList.add('selected');
+                            selectedFirebaseProjectId = id; 
+                            ui.btnConfirmLoadFirebase.disabled = false;
+                        });
+                        ui.firebaseProjectList.appendChild(li);
+                        hasProjects = true;
+                    }
+                    if (!hasProjects) {
+                         ui.firebaseProjectList.innerHTML = '<li>Nenhum projeto encontrado.</li>';
+                    }
+                } else {
+                    ui.firebaseProjectList.innerHTML = '<li>Nenhum projeto encontrado.</li>';
+                }
+            } catch (error) {
+                logConsole('error', `Falha ao listar projetos do Firebase: ${error.message}`);
+                console.error("Firebase (Erro Listagem):", error);
+                ui.firebaseProjectList.innerHTML = '<li>Erro ao carregar projetos.</li>';
+            }
+        }
+
+        async function confirmLoadFirebase() {
+            if (!selectedFirebaseProjectId) {
+                logConsole('warning', 'Nenhum projeto selecionado para carregar.');
+                return;
+            }
+
+            const firebase = window.firebaseRefs;
+            logConsole('info', `Carregando projeto "${motor._firebaseDecodeKey(selectedFirebaseProjectId)}" do Firebase...`);
+            toggleModal(ui.modalLoadFirebase, false); 
+
+            try {
+                const dbRef = firebase.ref(firebase.getDatabase());
+                const snapshot = await firebase.get(firebase.child(dbRef, 'projects/' + selectedFirebaseProjectId));
+                if (snapshot.exists()) {
+                    const loadedData = snapshot.val().projectContent; 
+                    
+                    motor.limparCena(); // Limpa a cena ATUAL antes de aplicar os dados do novo projeto
+                    
+                    motor.aplicarDadosDoProjeto(loadedData, aceEditor, fileSystem, (newActiveWorldPath) => {
+                        activeWorldPath = newActiveWorldPath; 
+                    }); 
+                    logConsole('info', `Projeto "${motor._firebaseDecodeKey(selectedFirebaseProjectId)}" carregado do Firebase com sucesso!`);
+                    renderFileTree();
+                    loadGraphicSettingsUI(); 
+                    recarregarMundoAtivo(); 
+                } else {
+                    logConsole('error', `Erro: Projeto "${motor._firebaseDecodeKey(selectedFirebaseProjectId)}" não encontrado ao tentar carregar.`);
+                }
+            } catch (error) {
+                logConsole('error', `Falha ao carregar o projeto "${motor._firebaseDecodeKey(selectedFirebaseProjectId)}" do Firebase: ${error.message}`);
+                console.error("Firebase (Erro Carregamento):", error);
+                if (error.code === 'PERMISSION_DENIED') {
+                    logConsole('error', 'Erro de permissão no Firebase. Verifique suas regras de segurança no console do Firebase.');
+                }
+            }
+        }
+
+        function hideFirebaseModals() {
+            toggleModal(ui.modalSaveFirebase, false);
+            toggleModal(ui.modalLoadFirebase, false);
+        }
+        
+        // --- FUNÇÕES DO MODAL DE INPUT GENÉRICO ---
+        function showInputModal(title, label, hint, defaultValue, callback) {
+            ui.modalInputTitle.textContent = title;
+            ui.modalInputLabel.textContent = label;
+            ui.modalInputHint.textContent = hint || '';
+            ui.modalInputValue.value = defaultValue || '';
+            ui.modalInputValue.placeholder = label.replace(':', '');
+            currentInputModalCallback = callback;
+            toggleModal(ui.modalInput, true);
+            ui.modalInputValue.focus();
+            ui.modalInputValue.select();
+        }
+
+        function confirmInputModal() {
+            if (currentInputModalCallback) {
+                currentInputModalCallback(ui.modalInputValue.value);
+            }
+            hideInputModal();
+        }
+
+        function hideInputModal() {
+            toggleModal(ui.modalInput, false);
+            currentInputModalCallback = null;
         }
 
 
-        function updateUI() { const showPanels = window.innerWidth >= 768; document.getElementById('left-panel').style.display = showPanels ? 'flex' : 'none'; document.getElementById('right-panel').style.display = showPanels ? 'flex' : 'none'; }
-        function updateHierarchy() { 
-            ui.objectHierarchy.innerHTML = ''; 
-            const objects = motor.getObjetosNaCena(); 
-            Object.keys(objects).sort().forEach(id => { 
-                const obj = objects[id]; 
-                const li = document.createElement('li'); 
-                li.textContent = obj.name || id; 
-                li.dataset.id = id; 
-                let iconClass = 'fa-cube'; 
-                if (obj.type === 'esfera') iconClass = 'fa-globe'; 
-                if (obj.type.startsWith('luz')) iconClass = 'fa-lightbulb'; 
-                if (obj.type === 'plano') iconClass = 'fa-square-full'; 
-                if (obj.type === 'camera_jogo') iconClass = 'fa-video'; 
-                li.innerHTML = `<i class="fas ${iconClass}"></i> ${li.textContent}`; 
-                if (id === objetoSelecionadoId) { li.classList.add('selected'); } 
-                li.addEventListener('click', () => selecionarObjeto(id)); 
-                ui.objectHierarchy.appendChild(li); 
-            }); 
+        function updateUI() { 
+            const showPanels = window.innerWidth >= 768; 
+            document.getElementById('left-panel').style.display = showPanels ? 'flex' : 'none'; 
+            document.getElementById('right-panel-container').style.display = showPanels ? 'flex' : 'none';
         }
-        function selecionarObjeto(id) { if(isPlaying) return; objetoSelecionadoId = id; motor.selecionarObjeto(id); updateHierarchy(); updatePropertiesPanel(id); }
+        
+        // --- HIERARQUIA DE OBJETOS ---
+        function updateHierarchy() {
+            ui.objectHierarchy.innerHTML = '';
+            const objects = motor.getObjetosNaCena();
+            const rootObjects = Object.values(objects).filter(obj => !obj.parentId && !obj.id.endsWith('_padrao'));
+
+            const createHierarchyNode = (obj, parentElement, level = 0) => {
+                const li = document.createElement('li');
+                li.style.paddingLeft = `${level * 10}px`; // Indentação
+                li.dataset.id = obj.id;
+
+                const toggle = document.createElement('span');
+                toggle.className = 'hierarchy-toggle';
+                
+                let iconClass = 'fa-cube';
+                if (obj.type === 'esfera') iconClass = 'fa-globe';
+                if (obj.type.startsWith('luz')) iconClass = 'fa-lightbulb';
+                if (obj.type === 'plano') iconClass = 'fa-square-full';
+                if (obj.type === 'camera_jogo') iconClass = 'fa-video';
+
+                const iconElement = document.createElement('i');
+                iconElement.className = `fas ${iconClass}`;
+                
+                const nameSpan = document.createElement('span');
+                nameSpan.textContent = ` ${obj.name || obj.id}`;
+
+                li.appendChild(toggle);
+                li.appendChild(iconElement);
+                li.appendChild(nameSpan);
+
+                if (obj.id === objetoSelecionadoId) {
+                    li.classList.add('selected');
+                }
+
+                li.addEventListener('click', (e) => {
+                    e.stopPropagation(); 
+                    if (isPickingChild) {
+                        if (prospectiveParentId && prospectiveParentId !== obj.id) {
+                             motor.setParent(obj.id, prospectiveParentId);
+                             updateHierarchy();
+                             logConsole('info', `Objeto "${obj.name || obj.id}" definido como filho de "${motor.getObjetosNaCena()[prospectiveParentId].name || prospectiveParentId}".`);
+                        }
+                        isPickingChild = false;
+                        prospectiveParentId = null;
+                        document.body.style.cursor = 'default';
+                        // Remove o listener global após a seleção ou cancelamento
+                        document.removeEventListener('keydown', handlePickingChildEscape, true);
+                        document.removeEventListener('click', handlePickingChildClick, true);
+                    } else {
+                        selecionarObjeto(obj.id);
+                    }
+                });
+                li.addEventListener('contextmenu', (e) => showObjectHierarchyContextMenu(e, obj.id));
+
+                parentElement.appendChild(li);
+
+                if (obj.childrenIds && obj.childrenIds.length > 0) {
+                    toggle.innerHTML = obj.isExpanded ? '<i class="fas fa-caret-down"></i>' : '<i class="fas fa-caret-right"></i>';
+                    toggle.onclick = (e) => {
+                        e.stopPropagation();
+                        obj.isExpanded = !obj.isExpanded;
+                        updateHierarchy(); 
+                    };
+                    if (obj.isExpanded) {
+                        const ul = document.createElement('ul');
+                        parentElement.appendChild(ul);
+                        obj.childrenIds.forEach(childId => {
+                            const childObj = objects[childId];
+                            if (childObj) createHierarchyNode(childObj, ul, level + 1);
+                        });
+                    }
+                } else {
+                    toggle.classList.add('empty'); 
+                }
+            };
+
+            rootObjects.sort((a,b) => (a.name || a.id).localeCompare(b.name || b.id)).forEach(obj => createHierarchyNode(obj, ui.objectHierarchy));
+        }
+
+
+        function showObjectHierarchyContextMenu(event, objectId) {
+            event.preventDefault();
+            event.stopPropagation(); 
+            hideFileContextMenu(); 
+            hideObjectHierarchyContextMenu(); // Esconde qualquer um aberto
+
+            const obj = motor.getObjetosNaCena()[objectId];
+            if (!obj) return;
+
+            ui.ctxSetParent.style.display = 'block';
+            ui.ctxRemoveParent.style.display = obj.parentId ? 'block' : 'none';
+
+            ui.objectHierarchyContextMenu.style.left = `${event.clientX}px`;
+            ui.objectHierarchyContextMenu.style.top = `${event.clientY}px`;
+            ui.objectHierarchyContextMenu.style.display = 'block';
+
+            ui.objectHierarchyContextMenu.dataset.objectId = objectId;
+
+            document.addEventListener('click', hideObjectHierarchyContextMenu, { once: true });
+        }
+
+        function hideObjectHierarchyContextMenu() {
+            ui.objectHierarchyContextMenu.style.display = 'none';
+        }
+        
+        function handlePickingChildEscape(e) {
+            if (e.key === 'Escape') {
+                isPickingChild = false;
+                prospectiveParentId = null;
+                document.body.style.cursor = 'default';
+                logConsole('info', 'Seleção de filho cancelada.');
+                document.removeEventListener('keydown', handlePickingChildEscape, true);
+                document.removeEventListener('click', handlePickingChildClick, true);
+            }
+        }
+
+        function handlePickingChildClick(e) {
+            // Verifica se o clique não foi em um botão de UI que poderia ter seu próprio handler
+            if (e.target.closest('button, input, select, textarea, .context-menu, .modal-overlay')) {
+                return;
+            }
+             // Se o clique foi na cena ou hierarquia e não no objeto pai, finaliza
+            if (isPickingChild && !e.target.closest(`[data-id="${prospectiveParentId}"]`)) {
+                isPickingChild = false;
+                prospectiveParentId = null;
+                document.body.style.cursor = 'default';
+                document.removeEventListener('keydown', handlePickingChildEscape, true);
+                document.removeEventListener('click', handlePickingChildClick, true);
+            }
+        }
+
+
+        function handleSetParent() {
+            prospectiveParentId = ui.objectHierarchyContextMenu.dataset.objectId;
+            if (!prospectiveParentId) return;
+
+            isPickingChild = true;
+            document.body.style.cursor = 'crosshair'; 
+            logConsole('info', `Selecione um objeto na cena ou na hierarquia para torná-lo filho de "${motor.getObjetosNaCena()[prospectiveParentId].name || prospectiveParentId}". Pressione ESC para cancelar.`);
+            hideObjectHierarchyContextMenu();
+            // Adiciona listeners globais para cancelar ou confirmar a seleção do filho
+            document.addEventListener('keydown', handlePickingChildEscape, true);
+            document.addEventListener('click', handlePickingChildClick, true);
+        }
+
+        function handleRemoveParent() {
+            const childId = ui.objectHierarchyContextMenu.dataset.objectId;
+            if (childId) {
+                motor.removeParent(childId);
+                updateHierarchy();
+            }
+            hideObjectHierarchyContextMenu();
+        }
+
+
+
+        // Função para controlar a visibilidade dos controles do canvas
+        function updateCanvasControlsVisibility() {
+            const show = objetoSelecionadoId && !isPlaying;
+            ui.canvasControlsToolbar.style.display = show ? 'flex' : 'none';
+            ui.canvasDeleteButton.style.display = show ? 'flex' : 'none';
+        }
+
+        function selecionarObjeto(id) { 
+            if(isPlaying) return; 
+            if (isPickingChild) { // NOVO: Lógica para seleção de filho
+                if (prospectiveParentId && prospectiveParentId !== id) {
+                     motor.setParent(id, prospectiveParentId);
+                     updateHierarchy();
+                     logConsole('info', `Objeto "${motor.getObjetosNaCena()[id].name || id}" definido como filho de "${motor.getObjetosNaCena()[prospectiveParentId].name || prospectiveParentId}".`);
+                }
+                isPickingChild = false;
+                prospectiveParentId = null;
+                document.body.style.cursor = 'default';
+                document.removeEventListener('keydown', handlePickingChildEscape, true);
+                document.removeEventListener('click', handlePickingChildClick, true);
+                // Após definir o pai, não seleciona o filho automaticamente, mantém o pai selecionado
+                // ou desseleciona tudo, dependendo da UX desejada. Por ora, mantém o pai.
+                if (objetoSelecionadoId === prospectiveParentId) {
+                    // Não faz nada, já está selecionado
+                } else if (prospectiveParentId) {
+                    selecionarObjeto(prospectiveParentId); // Re-seleciona o pai
+                }
+                return; // Impede a seleção normal do objeto clicado
+            }
+
+            objetoSelecionadoId = id; 
+            motor.selecionarObjeto(id); 
+            updateHierarchy(); 
+            updatePropertiesPanel(id);
+            updateCanvasControlsVisibility(); 
+        }
+
 
         function updatePropertiesPanel(id) {
             if (!id || !motor) {
                 ui.objectProperties.innerHTML = '<p>Selecione um objeto para ver suas propriedades.</p>';
+                updateCanvasControlsVisibility(); 
                 return;
             }
             const obj = motor.getObjetosNaCena()[id];
-            if (!obj) return;
+            if (!obj) {
+                updateCanvasControlsVisibility(); 
+                return;
+            }
+            updateCanvasControlsVisibility(); 
 
             let html = `<h5>${obj.name || id}</h5>`;
             const threeObj = obj.threeObj;
@@ -823,6 +1272,7 @@
             if (threeObj.position) {
                 const pos = threeObj.position;
                 const rot = threeObj.rotation;
+                const scale = threeObj.scale; // NOVO: Pega a escala
                 html += `<div class="property-group"><h5>Transform</h5>
                     <div class="prop-row"><span class="prop-label">P</span>
                         <input type="number" step="0.1" value="${pos.x.toFixed(2)}" data-prop="position.x" data-type="float">
@@ -834,14 +1284,18 @@
                         <input type="number" step="1" value="${(rot.y * 180 / Math.PI).toFixed(1)}" data-prop="rotation.y" data-type="degrees">
                         <input type="number" step="1" value="${(rot.z * 180 / Math.PI).toFixed(1)}" data-prop="rotation.z" data-type="degrees">
                     </div>
+                    <div class="prop-row"><span class="prop-label">S</span> <!-- NOVO: Linha de Escala -->
+                        <input type="number" step="0.1" value="${scale.x.toFixed(2)}" data-prop="scale.x" data-type="float">
+                        <input type="number" step="0.1" value="${scale.y.toFixed(2)}" data-prop="scale.y" data-type="float">
+                        <input type="number" step="0.1" value="${scale.z.toFixed(2)}" data-prop="scale.z" data-type="float">
+                    </div>
                 </div>`;
             }
 
             // PROPRIEDADES DA CÂMERA DE JOGO
             if (obj.type === 'camera_jogo') {
                 html += `<div class="property-group"><h5>Câmera de Jogo</h5>
-                    <label>FOV: <span class="range-value">${obj.threeObj.fov.toFixed(1)}</span></label>
-                    <input type="range" min="30" max="120" step="1" value="${obj.threeObj.fov}" data-prop="fov" data-type="float">
+                    <label>FOV: <input type="number" step="1" value="${obj.threeObj.fov.toFixed(1)}" data-prop="fov" data-type="float"></label>
                     <label>Near: <input type="number" step="0.1" value="${obj.threeObj.near.toFixed(2)}" data-prop="near" data-type="float"></label>
                     <label>Far: <input type="number" step="1" value="${obj.threeObj.far.toFixed(2)}" data-prop="far" data-type="float"></label>
                 </div>`;
@@ -851,8 +1305,7 @@
                  html += `<div class="property-group"><h5>Luz</h5>
                     <label>Cor</label>
                     <input type="color" value="#${threeObj.color.getHexString()}" data-prop="color">
-                    <label>Intensidade: <span class="range-value">${(threeObj.intensity).toFixed(2)}</span></label>
-                    <input type="range" min="0" max="5" step="0.05" value="${threeObj.intensity}" data-prop="intensity" data-type="float">
+                    <label>Intensidade: <input type="number" step="0.05" value="${threeObj.intensity.toFixed(2)}" data-prop="intensity" data-type="float"></label>
                 </div>`;
             }
 
@@ -867,56 +1320,38 @@
                         <input type="file" id="tex-albedo-${id}" accept="image/*" style="display:none" data-map-type="map">
                         <button class="btn-load-texture" data-target-file-input="tex-albedo-${id}">Carregar</button>
                     </div>
-                    <label>Metalness: <span class="range-value">${(mat.metalness).toFixed(2)}</span></label>
-                    <input type="range" min="0" max="1" step="0.01" value="${mat.metalness}" data-prop="material.metalness" data-type="float">
-                    <label>Roughness: <span class="range-value">${(mat.roughness).toFixed(2)}</span></label>
-                    <input type="range" min="0" max="1" step="0.01" value="${mat.roughness}" data-prop="material.roughness" data-type="float">
+                    <label>Metalness: <input type="number" min="0" max="1" step="0.01" value="${mat.metalness.toFixed(2)}" data-prop="material.metalness" data-type="float"></label>
+                    <label>Roughness: <input type="number" min="0" max="1" step="0.01" value="${mat.roughness.toFixed(2)}" data-prop="material.roughness" data-type="float"></label>
                 </div>`;
             }
 
             // Grupo de propriedades da Física
             if (obj.physicsProperties) { 
                 const physicsProps = obj.physicsProperties;
-                const bodyType = physicsProps.bodyType;
-                const mass = physicsProps.mass;
-                const friction = physicsProps.friction;
-                const restitution = physicsProps.restitution;
-                const collisionShape = physicsProps.collisionShape || (obj.type === 'caixa' ? 'box' : (obj.type === 'esfera' ? 'sphere' : 'plane')); 
-                const linearDamping = physicsProps.linearDamping ?? 0.01; 
-                const angularDamping = physicsProps.angularDamping ?? 0.01; 
-
-                const isDynamic = bodyType === 'dynamic';
-                const isStatic = bodyType === 'static';
-                const isNone = bodyType === 'none';
-
                 html += `<div class="property-group"><h5>Física</h5>
                     <label>Tipo de Corpo:</label>
-                    <div>
-                        <label><input type="radio" name="physics-body-type-${id}" value="dynamic" ${isDynamic ? 'checked' : ''} data-prop="physics.bodyType"> Dinâmico</label>
-                        <label><input type="radio" name="physics-body-type-${id}" value="static" ${isStatic ? 'checked' : ''} data-prop="physics.bodyType"> Estático</label>
-                        <label><input type="radio" name="physics-body-type-${id}" value="none" ${isNone ? 'checked' : ''} data-prop="physics.bodyType"> Nenhum</label>
-                    </div>
-                    <div id="physics-options-${id}" style="display:${isNone ? 'none' : 'block'};">
+                    <select data-prop="physics.bodyType">
+                        <option value="dynamic" ${physicsProps.bodyType === 'dynamic' ? 'selected' : ''}>Dinâmico</option>
+                        <option value="static" ${physicsProps.bodyType === 'static' ? 'selected' : ''}>Estático</option>
+                        <option value="none" ${physicsProps.bodyType === 'none' ? 'selected' : ''}>Nenhum</option>
+                    </select>
+                    <div id="physics-options-${id}" style="display:${physicsProps.bodyType === 'none' ? 'none' : 'block'};">
                         <label>Forma de Colisão:</label>
-                        <select id="collision-shape-${id}" data-prop="physics.collisionShape" ${isNone ? 'disabled' : ''}>
-                            <option value="box" ${collisionShape === 'box' ? 'selected' : ''}>Caixa</option>
-                            <option value="sphere" ${collisionShape === 'sphere' ? 'selected' : ''}>Esfera</option>
-                            <option value="plane" ${collisionShape === 'plane' ? 'selected' : ''}>Plano</option>
+                        <select data-prop="physics.collisionShape" ${physicsProps.bodyType === 'none' ? 'disabled' : ''}>
+                            <option value="box" ${physicsProps.collisionShape === 'box' ? 'selected' : ''}>Caixa</option>
+                            <option value="sphere" ${physicsProps.collisionShape === 'sphere' ? 'selected' : ''}>Esfera</option>
+                            <option value="plane" ${physicsProps.collisionShape === 'plane' ? 'selected' : ''}>Plano</option>
                         </select>
-                        <label>Massa: <input type="number" step="0.1" value="${mass}" data-prop="physics.mass" data-type="float" ${isDynamic ? '' : 'disabled'}></label>
-                        <label>Fricção: <span class="range-value">${friction.toFixed(2)}</span></label>
-                        <input type="range" min="0" max="1" step="0.01" value="${friction}" data-prop="physics.friction" data-type="float" ${isNone ? 'disabled' : ''}>
-                        <label>Restituição (Quique): <span class="range-value">${restitution.toFixed(2)}</span></label>
-                        <input type="range" min="0" max="1" step="0.01" value="${restitution}" data-prop="physics.restitution" data-type="float" ${isNone ? 'disabled' : ''}>
-                        <label>Atrito Linear (Ar): <span class="range-value">${linearDamping.toFixed(2)}</span></label>
-                        <input type="range" min="0" max="1" step="0.01" value="${linearDamping}" data-prop="physics.linearDamping" data-type="float" ${isNone ? 'disabled' : ''}>
-                        <label>Atrito Angular (Ar): <span class="range-value">${angularDamping.toFixed(2)}</span></label>
-                        <input type="range" min="0" max="1" step="0.01" value="${angularDamping}" data-prop="physics.angularDamping" data-type="float" ${isNone ? 'disabled' : ''}>
+                        <label>Massa: <input type="number" step="0.1" value="${physicsProps.mass}" data-prop="physics.mass" data-type="float" ${physicsProps.bodyType === 'dynamic' ? '' : 'disabled'}></label>
+                        <label>Fricção: <input type="number" min="0" max="1" step="0.01" value="${physicsProps.friction.toFixed(2)}" data-prop="physics.friction" data-type="float" ${physicsProps.bodyType === 'none' ? 'disabled' : ''}></label>
+                        <label>Restituição (Quique): <input type="number" min="0" max="1" step="0.01" value="${physicsProps.restitution.toFixed(2)}" data-prop="physics.restitution" data-type="float" ${physicsProps.bodyType === 'none' ? 'disabled' : ''}></label>
+                        <label>Atrito Linear (Ar): <input type="number" min="0" max="1" step="0.01" value="${(physicsProps.linearDamping ?? 0.01).toFixed(2)}" data-prop="physics.linearDamping" data-type="float" ${physicsProps.bodyType === 'none' ? 'disabled' : ''}></label>
+                        <label>Atrito Angular (Ar): <input type="number" min="0" max="1" step="0.01" value="${(physicsProps.angularDamping ?? 0.01).toFixed(2)}" data-prop="physics.angularDamping" data-type="float" ${physicsProps.bodyType === 'none' ? 'disabled' : ''}></label>
                     </div>
                 </div>`;
             }
             
-            html += `<button id="btn-delete-object" style="background-color:#dc3545; color:white; width:100%; padding:8px; border:none; border-radius:4px; cursor:pointer;">Remover Objeto</button>`;
+            // Botão de deletar foi movido para o canvas
             
             ui.objectProperties.innerHTML = html;
             addPropertyListeners(id); 
@@ -940,65 +1375,19 @@
                         value = e.target.value; 
                     }
                     motor.atualizarPropriedadeObjeto(id, prop, value);
-
-                    if (e.target.type === 'range') {
-                        const label = e.target.previousElementSibling;
-                        if(label && label.querySelector('.range-value')) {
-                            label.querySelector('.range-value').textContent = parseFloat(e.target.value).toFixed(2);
-                        }
+                    if (prop === 'physics.bodyType') {
+                        updatePropertiesPanel(id); 
                     }
                 });
                 if (input.tagName === 'SELECT') {
                     input.addEventListener('change', (e) => {
-                        motor.atualizarPropriedadeObjeto(id, e.target.dataset.prop, e.target.value);
+                         motor.atualizarPropriedadeObjeto(id, e.target.dataset.prop, e.target.value);
+                         if (e.target.dataset.prop === 'physics.bodyType') {
+                             updatePropertiesPanel(id); 
+                         }
                     });
                 }
             });
-
-            container.querySelectorAll(`input[name="physics-body-type-${id}"]`).forEach(radio => {
-                radio.addEventListener('change', (e) => {
-                    const newBodyType = e.target.value;
-                    motor.atualizarPropriedadeObjeto(id, 'physics.bodyType', newBodyType);
-
-                    const physicsOptionsDiv = document.getElementById(`physics-options-${id}`);
-                    const massInput = physicsOptionsDiv?.querySelector('input[data-prop="physics.mass"]');
-                    const frictionInput = physicsOptionsDiv?.querySelector('input[data-prop="physics.friction"]');
-                    const restitutionInput = physicsOptionsDiv?.querySelector('input[data-prop="physics.restitution"]');
-                    const collisionShapeSelect = physicsOptionsDiv?.querySelector('select[data-prop="physics.collisionShape"]');
-                    const linearDampingInput = physicsOptionsDiv?.querySelector('input[data-prop="physics.linearDamping"]');
-                    const angularDampingInput = physicsOptionsDiv?.querySelector('input[data-prop="physics.angularDamping"]');
-
-                    if (newBodyType === 'none') {
-                        physicsOptionsDiv.style.display = 'none';
-                        if (massInput) massInput.disabled = true;
-                        if (frictionInput) frictionInput.disabled = true;
-                        if (restitutionInput) restitutionInput.disabled = true;
-                        if (collisionShapeSelect) collisionShapeSelect.disabled = true;
-                        if (linearDampingInput) linearDampingInput.disabled = true;
-                        if (angularDampingInput) angularDampingInput.disabled = true;
-                    } else {
-                        physicsOptionsDiv.style.display = 'block';
-                        if (frictionInput) frictionInput.disabled = false;
-                        if (restitutionInput) restitutionInput.disabled = false;
-                        if (collisionShapeSelect) collisionShapeSelect.disabled = false;
-                        if (linearDampingInput) linearDampingInput.disabled = false;
-                        if (angularDampingInput) angularDampingInput.disabled = false;
-                        
-                        if (newBodyType === 'static') {
-                            if (massInput) {
-                                massInput.value = 0; 
-                                massInput.disabled = true;
-                            }
-                        } else { 
-                            if (massInput) {
-                                massInput.disabled = false;
-                                if (parseFloat(massInput.value) === 0) massInput.value = 1;
-                            }
-                        }
-                    }
-                });
-            });
-
 
             container.querySelectorAll('.btn-load-texture').forEach(button => {
                 button.addEventListener('click', (e) => { document.getElementById(e.target.dataset.targetFileInput).click(); });
@@ -1008,7 +1397,6 @@
                     const file = e.target.files[0];
                     if (!file) return;
                     const mapType = e.target.dataset.mapType;
-                    // Ao carregar textura local, use Data URL para que seja serializável no projeto
                     const reader = new FileReader();
                     reader.onload = (readEvent) => {
                         const dataUrl = readEvent.target.result;
@@ -1016,13 +1404,12 @@
                         logConsole('info', `Carregando textura '${file.name}' para ${mapType}.`);
                         e.target.parentElement.querySelector('input[type="text"]').value = file.name;
                         
-                        // NOVO: Adiciona a textura ao gerenciador de arquivos
                         const texturesFolder = getFolder(['assets', 'textures']);
-                        if (texturesFolder && !texturesFolder[file.name]) { // Garante que não sobrescreva se já existe
+                        if (texturesFolder && !texturesFolder[file.name]) { 
                             texturesFolder[file.name] = {
                                 type: 'image',
-                                url: dataUrl,
-                                content: null // Não armazena conteúdo binário diretamente
+                                url: dataUrl, 
+                                content: null 
                             };
                             renderFileTree();
                             logConsole('info', `Textura '${file.name}' adicionada ao gerenciador de arquivos.`);
@@ -1031,7 +1418,7 @@
                     reader.readAsDataURL(file);
                 });
             });
-            document.getElementById('btn-delete-object')?.addEventListener('click', () => { motor.removerObjeto(id); updateHierarchy(); updatePropertiesPanel(null); });
+            // O botão de deletar foi movido para o canvas.
         }
         
         // --- Funções de Configuração Gráfica na UI ---
@@ -1054,7 +1441,6 @@
             ui.settingsShadowsOptions.style.display = ui.settingsShadowsEnabled.checked ? 'block' : 'none';
             ui.settingsToneMappingOptions.style.display = ui.settingsToneMappingEnabled.checked ? 'block' : 'none';
 
-            // Carregar configurações de Background
             ui.settingsBackgroundColor.value = `#${motor.cena.background?.getHexString() || '1a1a1a'}`;
             ui.settingsEnvironmentMapName.value = motor.cena._backgroundConfig.environmentMapName || 'Nenhuma';
         }
@@ -1070,10 +1456,8 @@
             };
             motor.aplicarConfiguracoesDeRenderizacao(settings);
             
-            // Aplicar configurações de Fundo da Cena
             const backgroundSettings = {
                 color: ui.settingsBackgroundColor.value,
-                // Passa o File object ou null
                 environmentMap: ui.settingsEnvironmentMapFile.files[0] || null 
             };
             motor.configurarFundoCena(backgroundSettings);
@@ -1087,7 +1471,7 @@
             let currentFolder = fileSystem;
             for (const p of path) {
                 if (!currentFolder[p] || typeof currentFolder[p] !== 'object' || currentFolder[p].type) {
-                    return null; // Caminho inválido ou é um arquivo
+                    return null; 
                 }
                 currentFolder = currentFolder[p];
             }
@@ -1110,14 +1494,13 @@
             const files = [];
 
             for (const name in currentFolder) {
-                if (currentFolder[name] && currentFolder[name].type) { // É um arquivo
+                if (currentFolder[name] && currentFolder[name].type) { 
                     files.push({ name, data: currentFolder[name] });
-                } else { // É uma pasta
+                } else { 
                     folders.push({ name, data: currentFolder[name] });
                 }
             }
 
-            // Ordena pastas e arquivos
             folders.sort((a, b) => a.name.localeCompare(b.name));
             files.sort((a, b) => a.name.localeCompare(b.name));
 
@@ -1129,7 +1512,7 @@
                 li.addEventListener('click', () => {
                     currentPath.push(item.name);
                     renderFileTree();
-                    selectedFileElement = null; // Limpa seleção ao mudar de pasta
+                    selectedFileElement = null; 
                 });
                 li.addEventListener('contextmenu', (e) => showFileContextMenu(e, item.name, 'folder'));
                 ui.fileTree.appendChild(li);
@@ -1137,14 +1520,14 @@
 
             files.forEach(item => {
                 const li = document.createElement('li');
-                let iconClass = 'fa-file-alt'; // Default
+                let iconClass = 'fa-file-alt'; 
                 if (item.name.match(/\.(png|jpg|jpeg|gif|hdr)$/i)) iconClass = 'fa-file-image';
                 else if (item.name.match(/\.js$/i)) iconClass = 'fa-file-code';
 
                 li.innerHTML = `<i class="fas ${iconClass}"></i> ${item.name}`;
                 li.dataset.name = item.name;
-                li.dataset.type = item.data.type; // 'image', 'script'
-                li.dataset.url = item.data.url; // Armazena a URL para uso posterior
+                li.dataset.type = item.data.type; 
+                li.dataset.url = item.data.url; 
 
                 li.addEventListener('click', (e) => {
                     if (selectedFileElement) {
@@ -1157,40 +1540,37 @@
                 ui.fileTree.appendChild(li);
             });
 
-            // Gerencia o botão "Voltar"
             ui.btnBackFolder.disabled = currentPath.length === 0;
-            // Gerencia o botão "Excluir" e "Renomear" (habilitado apenas se um arquivo/pasta for selecionado)
-            // Esses botões devem ser habilitados/desabilitados pelo clique no item ou no próprio botão
-            ui.btnDeleteFile.disabled = !selectedFileElement;
-            ui.btnRenameFile.disabled = !selectedFileElement;
         }
 
         function showFileContextMenu(event, name, type, url = null) {
             event.preventDefault(); 
+            hideFileContextMenu(); 
+            hideObjectHierarchyContextMenu();
 
-            if (selectedFileElement) {
-                selectedFileElement.classList.remove('selected-file');
+            if (name) { 
+                selectedFileElement = event.currentTarget;
+                selectedFileElement.classList.add('selected-file');
+                ui.fileContextMenu.dataset.fileName = name;
+                ui.fileContextMenu.dataset.fileType = type;
+                ui.fileContextMenu.dataset.fileUrl = url;
+            } else { 
+                 selectedFileElement = null; 
+                 ui.fileContextMenu.dataset.fileName = '';
+                 ui.fileContextMenu.dataset.fileType = 'container';
+                 ui.fileContextMenu.dataset.fileUrl = '';
             }
-            selectedFileElement = event.currentTarget;
-            selectedFileElement.classList.add('selected-file');
 
-            ui.ctxApplyTexture.style.display = 'none';
-            ui.ctxLoadScript.style.display = 'none';
-
-            if (type === 'image' && objetoSelecionadoId && motor.getObjetosNaCena()[objetoSelecionadoId]?.threeObj?.isMesh) {
-                ui.ctxApplyTexture.style.display = 'block';
-            }
-            if (type === 'script') {
-                ui.ctxLoadScript.style.display = 'block';
-            }
+            ui.ctxNewFolder.style.display = 'block'; 
+            ui.ctxNewWorld.style.display = 'block'; 
+            ui.ctxApplyTexture.style.display = (type === 'image' && objetoSelecionadoId && motor.getObjetosNaCena()[objetoSelecionadoId]?.threeObj?.isMesh) ? 'block' : 'none';
+            ui.ctxOpenWorld.style.display = (type === 'script' && currentPath.join('/') === 'assets/mundos') ? 'block' : 'none';
+            ui.ctxRenameFile.style.display = name ? 'block' : 'none'; 
+            ui.ctxDeleteFile.style.display = name ? 'block' : 'none';
 
             ui.fileContextMenu.style.left = `${event.clientX}px`;
             ui.fileContextMenu.style.top = `${event.clientY}px`;
             ui.fileContextMenu.style.display = 'block';
-
-            ui.fileContextMenu.dataset.fileName = name;
-            ui.fileContextMenu.dataset.fileType = type;
-            ui.fileContextMenu.dataset.fileUrl = url;
 
             document.addEventListener('click', hideFileContextMenu, { once: true });
         }
@@ -1201,25 +1581,77 @@
                 selectedFileElement.classList.remove('selected-file');
                 selectedFileElement = null;
             }
-            // Re-renderiza a árvore para atualizar o estado dos botões Excluir/Renomear
             renderFileTree(); 
         }
 
         function handleNewFolder() {
-            const folderName = prompt('Nome da nova pasta:');
-            if (folderName && !folderName.includes('/') && !folderName.includes('\\')) { 
-                const currentFolder = getFolder(currentPath);
-                if (currentFolder && !currentFolder[folderName]) {
-                    currentFolder[folderName] = {}; 
-                    renderFileTree();
-                    logConsole('info', `Pasta '${folderName}' criada.`);
-                } else {
-                    logConsole('warning', `Pasta '${folderName}' já existe ou nome inválido.`);
+            showInputModal('Nova Pasta', 'Nome da Pasta:', 'Apenas letras, números, hífens e underscores.', '', (folderName) => {
+                if (folderName && !folderName.includes('/') && !folderName.includes('\\')) { 
+                    const targetFolder = selectedFileElement && selectedFileElement.dataset.type === 'folder' ? 
+                                         getFolder(currentPath.concat(selectedFileElement.dataset.name)) : 
+                                         getFolder(currentPath);
+                    if (targetFolder && !targetFolder[folderName]) {
+                        targetFolder[folderName] = {}; 
+                        renderFileTree();
+                        logConsole('info', `Pasta '${folderName}' criada.`);
+                    } else {
+                        logConsole('warning', `Pasta '${folderName}' já existe ou nome inválido.`);
+                    }
+                } else if (folderName) {
+                    logConsole('warning', 'Nome da pasta contém caracteres inválidos.');
                 }
-            } else if (folderName) {
-                logConsole('warning', 'Nome da pasta contém caracteres inválidos.');
-            }
+            });
+            hideFileContextMenu();
         }
+        
+        function handleNewWorld() {
+            showInputModal('Novo Mundo', 'Nome do Mundo (ex: fase_2):', 'Será adicionado ".js" automaticamente se não incluído.', '', (worldName) => {
+                if (worldName && worldName.trim() !== "") {
+                    if (!worldName.endsWith('.js')) {
+                        worldName += '.js';
+                    }
+                    
+                    let targetMundosFolder;
+                    let targetPathArray;
+
+                    if (selectedFileElement && selectedFileElement.dataset.type === 'folder' && 
+                        selectedFileElement.dataset.name === 'mundos' && currentPath.join('/') === 'assets') {
+                        targetMundosFolder = getFolder(currentPath.concat('mundos'));
+                        targetPathArray = ['assets', 'mundos'];
+                    } else if (currentPath.join('/') === 'assets/mundos') { 
+                        targetMundosFolder = getFolder(currentPath);
+                        targetPathArray = [...currentPath];
+                    } else { 
+                        if (!fileSystem.assets) fileSystem.assets = {};
+                        if (!fileSystem.assets.mundos) fileSystem.assets.mundos = {};
+                        targetMundosFolder = fileSystem.assets.mundos;
+                        targetPathArray = ['assets', 'mundos'];
+                    }
+
+
+                    if (targetMundosFolder && !targetMundosFolder[worldName]) {
+                        const defaultWorldScript = `// Novo Mundo: ${worldName}\n\nmotor.adicionarObjeto('chao_${motor._firebaseEncodeKey(worldName.replace('.js',''))}', 'Chão', 'plano', { material: {color: 'green'} });\n\nconsole.log("Mundo '${worldName}' carregado!");\n`;
+                        targetMundosFolder[worldName] = {
+                            type: 'script',
+                            content: defaultWorldScript,
+                            url: `data:application/javascript;base64,${btoa(encodeURIComponent(defaultWorldScript))}`
+                        };
+                        
+                        activeWorldPath = targetPathArray.concat(worldName);
+                        loadWorldScriptToEditor(activeWorldPath);
+                        recarregarMundoAtivo();
+                        renderFileTree();
+                        logConsole('info', `Novo mundo '${worldName}' criado em '${targetPathArray.join('/')}' e aberto.`);
+                    } else {
+                        logConsole('warning', `Mundo '${worldName}' já existe em '${targetPathArray.join('/')}'.`);
+                    }
+                } else if (worldName !== null) { 
+                     logConsole('warning', 'Nome do mundo não pode ser vazio.');
+                }
+            });
+            hideFileContextMenu();
+        }
+
 
         function handleUploadFile(event) {
             const files = event.target.files;
@@ -1244,8 +1676,8 @@
 
                     currentFolder[file.name] = {
                         type: fileType,
-                        url: fileContent, // Data URL para imagens/HDR e scripts
-                        content: fileType === 'script' ? fileContent : null // Conteúdo RAW para scripts
+                        url: fileContent, 
+                        content: fileType === 'script' ? fileContent : null 
                     };
                     renderFileTree();
                     logConsole('info', `Arquivo '${file.name}' (${fileType}) carregado.`);
@@ -1275,24 +1707,43 @@
             const nameToDelete = selectedFileElement.dataset.name;
             const typeToDelete = selectedFileElement.dataset.type;
 
+            if (typeToDelete === 'script' && currentPath.join('/') === 'assets/mundos') {
+                const mundosFolder = getFolder(['assets', 'mundos']);
+                if (Object.keys(mundosFolder).length <= 1 && mundosFolder[nameToDelete]) {
+                    logConsole('error', 'Não é possível excluir o último mundo.');
+                    hideFileContextMenu();
+                    return;
+                }
+                if (activeWorldPath.join('/') === currentPath.join('/') + '/' + nameToDelete) {
+                    logConsole('error', 'Não é possível excluir o mundo ativo. Abra outro mundo primeiro.');
+                    hideFileContextMenu();
+                    return;
+                }
+            }
+
+
             let parentFolder = fileSystem;
             for (let i = 0; i < currentPath.length; i++) {
                 parentFolder = parentFolder[currentPath[i]];
             }
-
-            if (confirm(`Tem certeza que deseja excluir '${nameToDelete}'?`)) {
-                if (parentFolder && parentFolder[nameToDelete]) {
-                    if (typeToDelete === 'folder' && Object.keys(parentFolder[nameToDelete]).length > 0) {
-                        logConsole('error', `Pasta '${nameToDelete}' não está vazia. Exclua o conteúdo primeiro.`);
-                        return;
+            showInputModal(`Excluir ${typeToDelete === 'folder' ? 'Pasta' : 'Arquivo'}`, `Tem certeza que deseja excluir "${nameToDelete}"?`, 'Digite CONFIRMAR para prosseguir.', '', (confirmValue) => {
+                if (confirmValue.toUpperCase() === 'CONFIRMAR') {
+                    if (parentFolder && parentFolder[nameToDelete]) {
+                        if (typeToDelete === 'folder' && Object.keys(parentFolder[nameToDelete]).length > 0) {
+                            logConsole('error', `Pasta '${nameToDelete}' não está vazia. Exclua o conteúdo primeiro.`);
+                            return;
+                        }
+                        delete parentFolder[nameToDelete];
+                        renderFileTree();
+                        logConsole('info', `'${nameToDelete}' excluído.`);
+                    } else {
+                        logConsole('error', `Erro ao excluir '${nameToDelete}'. Item não encontrado.`);
                     }
-                    delete parentFolder[nameToDelete];
-                    renderFileTree();
-                    logConsole('info', `'${nameToDelete}' excluído.`);
                 } else {
-                    logConsole('error', `Erro ao excluir '${nameToDelete}'. Item não encontrado.`);
+                    logConsole('info', `Exclusão de '${nameToDelete}' cancelada.`);
                 }
-            }
+            });
+            hideFileContextMenu();
         }
 
         function handleRenameFile() {
@@ -1301,23 +1752,41 @@
                 return;
             }
             const oldName = selectedFileElement.dataset.name;
-            const newName = prompt(`Renomear '${oldName}' para:`);
-            if (newName && newName.trim() !== '' && newName !== oldName && !newName.includes('/') && !newName.includes('\\')) {
-                const currentFolder = getFolder(currentPath);
-                if (currentFolder && currentFolder[oldName] && !currentFolder[newName]) {
-                    currentFolder[newName] = currentFolder[oldName];
-                    delete currentFolder[oldName];
-                    renderFileTree();
-                    logConsole('info', `'${oldName}' renomeado para '${newName}'.`);
-                } else {
-                    logConsole('error', `Erro ao renomear '${oldName}'. Nome já existe ou inválido.`);
+            
+            showInputModal(`Renomear "${oldName}"`, 'Novo Nome:', 'Apenas letras, números, hífens e underscores.', oldName, (newName) => {
+                if (newName && newName.trim() !== '' && newName !== oldName && !newName.includes('/') && !newName.includes('\\')) {
+                    const currentFolder = getFolder(currentPath);
+                    if (currentFolder && currentFolder[oldName] && !currentFolder[newName]) {
+                        currentFolder[newName] = currentFolder[oldName];
+                        delete currentFolder[oldName];
+                        
+                        if (activeWorldPath.join('/') === currentPath.join('/') + '/' + oldName) {
+                            activeWorldPath = currentPath.concat(newName);
+                        }
+                        renderFileTree();
+                        logConsole('info', `'${oldName}' renomeado para '${newName}'.`);
+                    } else {
+                        logConsole('error', `Erro ao renomear '${oldName}'. Nome já existe ou inválido.`);
+                    }
+                } else if (newName) { 
+                    logConsole('warning', 'Nome inválido para renomear (vazio, igual ao antigo, ou contém caracteres inválidos).');
                 }
-            } else if (newName) { 
-                logConsole('warning', 'Nome inválido para renomear (vazio, igual ao antigo, ou contém caracteres inválidos).');
+            });
+            hideFileContextMenu();
+        }
+
+        function loadWorldScriptToEditor(pathArray) {
+            const worldFile = getFolder(pathArray.slice(0, -1))?.[pathArray[pathArray.length - 1]];
+            if (worldFile && worldFile.type === 'script' && typeof worldFile.content === 'string') {
+                aceEditor.setValue(worldFile.content, -1);
+                activeWorldPath = [...pathArray]; 
+                logConsole('info', `Mundo '${pathArray.join('/')}' carregado no editor.`);
+            } else {
+                logConsole('error', `Não foi possível carregar o script do mundo: '${pathArray.join('/')}'.`);
             }
         }
 
-        // --- Aplicação de Arquivos ---
+
         function applyTextureFromFileManager() {
             if (!objetoSelecionadoId) {
                 logConsole('warning', 'Selecione um objeto 3D antes de aplicar uma textura.');
@@ -1335,27 +1804,31 @@
             hideFileContextMenu();
         }
 
-        function loadScriptFromFileManager() {
+        function openWorldFromFileManager() {
             if (!selectedFileElement || selectedFileElement.dataset.type !== 'script') {
-                logConsole('warning', 'Selecione um arquivo JavaScript para carregar como script.');
+                logConsole('warning', 'Selecione um arquivo de mundo (.js) para abrir.');
                 return;
             }
-            const scriptName = selectedFileElement.dataset.name;
-            const currentFolder = getFolder(currentPath);
-            const scriptData = currentFolder ? currentFolder[scriptName] : null;
+            const worldName = selectedFileElement.dataset.name;
+            const worldPath = currentPath.concat(worldName); 
             
-            if (scriptData && scriptData.content) {
-                try {
-                    motor.executeScript(scriptData.content, scriptName); 
-                    logConsole('info', `Script '${scriptName}' carregado e executado com sucesso.`);
-                } catch (e) {
-                    logConsole('error', `Erro ao executar script '${scriptName}': ${e.message}`);
-                    console.error(e);
-                }
-            } else {
-                logConsole('error', `Não foi possível carregar o conteúdo do script '${scriptName}'.`);
-            }
+            loadWorldScriptToEditor(worldPath);
+            recarregarMundoAtivo();
             hideFileContextMenu();
+        }
+
+        // --- FUNÇÕES DE TROCA DE ABAS NO PAINEL DIREITO ---
+        function showPropertiesPanel() {
+            ui.rightPanel.style.display = 'flex';
+            ui.fileManagerPanel.style.display = 'none';
+            ui.btnTabProperties.classList.add('ativo');
+            ui.btnTabFiles.classList.remove('ativo');
+        }
+        function showFilesPanel() {
+            ui.rightPanel.style.display = 'none';
+            ui.fileManagerPanel.style.display = 'flex';
+            ui.btnTabProperties.classList.remove('ativo');
+            ui.btnTabFiles.classList.add('ativo');
         }
 
         // --- Event Listeners Principais e Modais ---
@@ -1369,17 +1842,34 @@
                 toggleModal(ui.modalSettings, true);
             };
             ui.btnToggleScriptEditor.onclick = () => toggleScriptEditor(true);
-            ui.btnRecompileScript.onclick = () => recarregarCena();
+            ui.btnRecompileWorld.onclick = recarregarMundoAtivo; 
             ui.btnGenerateScript.onclick = gerarESetarScript;
             
-            // NOVO: Event Listeners para Salvar/Carregar Projeto
-            ui.btnSaveProject.onclick = salvarProjetoCompleto;
-            ui.btnLoadProject.onclick = () => ui.loadProjectInput.click();
-            ui.loadProjectInput.onchange = carregarProjetoCompleto;
+            // Event Listeners para Salvar/Carregar Projeto Firebase
+            ui.btnSaveFirebase.onclick = salvarProjetoFirebase;
+            ui.btnLoadFirebase.onclick = carregarProjetoFirebase;
+            
+            ui.btnConfirmSaveFirebase.onclick = confirmSaveFirebase;
+            ui.btnCancelSaveFirebase.onclick = hideFirebaseModals;
+            ui.btnConfirmLoadFirebase.onclick = confirmLoadFirebase;
+            ui.btnCancelLoadFirebase.onclick = hideFirebaseModals;
 
+            // Event Listeners para o Modal de Input Genérico
+            ui.btnConfirmInputModal.onclick = confirmInputModal;
+            ui.btnCancelInputModal.onclick = hideInputModal;
+
+            // Listeners para controles no canvas
             ui.btnModoTranslate.onclick = () => setTransformMode('translate');
             ui.btnModoRotate.onclick = () => setTransformMode('rotate');
             ui.btnModoScale.onclick = () => setTransformMode('scale');
+            ui.canvasDeleteButton.onclick = () => {
+                if (objetoSelecionadoId) {
+                    motor.removerObjeto(objetoSelecionadoId); // Remove o objeto do motor
+                    // A UI será atualizada por `objetoDesselecionado` se o objeto removido era o selecionado
+                }
+            };
+
+
             ui.btnCloseScriptEditor.onclick = () => toggleScriptEditor(false);
             document.getElementById('btn-copy-code').onclick = () => { navigator.clipboard.writeText(aceEditor.getValue()); logConsole('info', 'Código copiado.'); };
             document.getElementById('btn-cancelar-modal').onclick = () => toggleModal(ui.modalAddObject, false);
@@ -1395,8 +1885,26 @@
             };
             window.onresize = updateUI;
             window.addEventListener('objetoSelecionado', (e) => selecionarObjeto(e.detail.id));
-            window.addEventListener('objetoDesselecionado', () => { objetoSelecionadoId = null; updateHierarchy(); updatePropertiesPanel(null); });
-            window.addEventListener('keydown', (e) => { if (!isPlaying && objetoSelecionadoId) { if (e.key.toLowerCase() === 't') setTransformMode('translate'); if (e.key.toLowerCase() === 'r') setTransformMode('rotate'); if (e.key.toLowerCase() === 's') setTransformMode('scale'); } });
+            window.addEventListener('objetoDesselecionado', () => { 
+                objetoSelecionadoId = null; 
+                updateHierarchy(); 
+                updatePropertiesPanel(null); 
+                updateCanvasControlsVisibility(); 
+            });
+            window.addEventListener('keydown', (e) => { 
+                if (isPickingChild && e.key === 'Escape') {
+                    isPickingChild = false;
+                    prospectiveParentId = null;
+                    document.body.style.cursor = 'default';
+                    logConsole('info', 'Seleção de filho cancelada.');
+                    document.removeEventListener('keydown', handlePickingChildEscape, true);
+                    document.removeEventListener('click', handlePickingChildClick, true);
+                } else if (!isPlaying && objetoSelecionadoId) { 
+                    if (e.key.toLowerCase() === 't') setTransformMode('translate'); 
+                    if (e.key.toLowerCase() === 'r') setTransformMode('rotate'); 
+                    if (e.key.toLowerCase() === 's') setTransformMode('scale'); 
+                } 
+            });
         
             // Listeners para os controles do console
             document.querySelectorAll('.btn-filter').forEach(btn => btn.addEventListener('click', (e) => updateConsoleFilter(e.currentTarget.dataset.filter)));
@@ -1431,19 +1939,33 @@
             });
 
             // Listeners para o Gerenciador de Arquivos
-            ui.btnToggleFileManager.onclick = () => ui.fileManagerPanel.classList.toggle('visivel');
-            ui.btnNewFolder.onclick = handleNewFolder;
+            // ui.btnToggleFileManager.onclick = () => ui.fileManagerPanel.classList.toggle('visivel'); // Removido
             ui.btnUploadFile.onclick = () => ui.fileUploadInput.click(); 
             ui.fileUploadInput.onchange = handleUploadFile;
-            ui.btnDeleteFile.onclick = handleDeleteFile;
-            ui.btnRenameFile.onclick = handleRenameFile;
             ui.btnBackFolder.onclick = () => { if (currentPath.length > 0) { currentPath.pop(); renderFileTree(); } };
+            ui.fileTreeContainer.addEventListener('contextmenu', (e) => {
+                if (e.target === ui.fileTreeContainer || e.target === ui.fileTree) { 
+                    showFileContextMenu(e, null, 'container');
+                }
+            });
 
-            // Listeners para o Context Menu
+
+            // Listeners para o Context Menu (Gerenciador de Arquivos)
+            ui.ctxNewFolder.onclick = () => { handleNewFolder(); hideFileContextMenu(); };
+            ui.ctxNewWorld.onclick = () => { handleNewWorld(); hideFileContextMenu(); };
             ui.ctxApplyTexture.onclick = applyTextureFromFileManager;
-            ui.ctxLoadScript.onclick = loadScriptFromFileManager;
+            ui.ctxOpenWorld.onclick = openWorldFromFileManager; 
             ui.ctxRenameFile.onclick = () => { handleRenameFile(); hideFileContextMenu(); };
             ui.ctxDeleteFile.onclick = () => { handleDeleteFile(); hideFileContextMenu(); };
+
+            // Listeners para o Context Menu (Hierarquia de Objetos)
+            ui.ctxSetParent.onclick = handleSetParent;
+            ui.ctxRemoveParent.onclick = handleRemoveParent;
+
+             // Listeners para abas do painel direito
+            ui.btnTabProperties.onclick = showPropertiesPanel;
+            ui.btnTabFiles.onclick = showFilesPanel;
+
 
             // Listeners para configurações de Background
             ui.settingsBackgroundColor.addEventListener('input', (e) => {
@@ -1469,7 +1991,15 @@
         
         function toggleModal(modal, show) { modal.classList.toggle('visivel', show); }
         function toggleScriptEditor(show) { ui.codigoEditorContainer.classList.toggle('visivel', show); }
-        function setTransformMode(mode) { motor.getControlesTransform().setMode(mode); ['btn-modo-translate', 'btn-modo-rotate', 'btn-modo-scale'].forEach(id => document.getElementById(id).classList.remove('ativo')); document.getElementById(`btn-modo-${mode}`).classList.add('ativo'); }
+        function setTransformMode(mode) { 
+            motor.getControlesTransform().setMode(mode); 
+            ['btn-modo-translate', 'btn-modo-rotate', 'btn-modo-scale'].forEach(id => {
+                const btn = document.getElementById(id);
+                if(btn) btn.classList.remove('ativo');
+            }); 
+            const activeBtn = document.getElementById(`btn-modo-${mode}`);
+            if(activeBtn) activeBtn.classList.add('ativo');
+        }
 
         init();
     });
