@@ -11,11 +11,11 @@
     <script src="https://unpkg.com/three@0.128.0/examples/js/controls/TransformControls.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.12/ace.js" type="text/javascript" charset="utf-8"></script>
     <script src="https://unpkg.com/cannon@0.6.2/build/cannon.min.js"></script>
-    <!-- Dependência para Carregamento de HDRIs -->
     <script src="https://unpkg.com/three@0.128.0/examples/js/loaders/RGBELoader.js"></script>
 
     <!-- Firebase SDKs -->
     <script type="module">
+        // ... (código Firebase igual ao anterior) ...
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-app.js";
         import { getAnalytics } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-analytics.js";
         import { getDatabase, ref, set, get, child, onValue } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-database.js"; 
@@ -61,51 +61,87 @@
             --cor-info: #6bcf6b;
             --cor-erro: #ff6b6b;
             --cor-aviso: #ffd700;
+            --altura-toolbar: 50px; /* Altura da barra de ferramentas principal */
             --altura-console-desktop: 200px;
             --altura-console-mobile: 150px;
+            --padding-geral: 10px;
+        }
+        html, body {
+            height: 100%;
+            width: 100%;
+            margin: 0;
+            padding: 0;
+            overflow: hidden; /* Previne scroll no body */
         }
         body { 
-            margin: 0; 
             font-family: 'Segoe UI', sans-serif; 
             background-color: var(--cor-fundo-principal); 
             color: var(--cor-texto); 
-            overflow: hidden; 
             display: flex; 
             flex-direction: column; 
-            height: 100vh; 
-            width: 100vw;
             -webkit-user-select: none;
             -moz-user-select: none;
             -ms-user-select: none;
             user-select: none;
         }
-        #main-toolbar { display: flex; align-items: center; background-color: var(--cor-painel); padding: 8px 10px; border-bottom: 1px solid var(--cor-borda); gap: 10px; overflow-x: auto; white-space: nowrap; flex-shrink: 0; scrollbar-width: none; -ms-overflow-style: none; }
+        #main-toolbar { 
+            display: flex; align-items: center; background-color: var(--cor-painel); 
+            padding: 8px var(--padding-geral); border-bottom: 1px solid var(--cor-borda); 
+            gap: 10px; overflow-x: auto; white-space: nowrap; 
+            flex-shrink: 0; height: var(--altura-toolbar); box-sizing: border-box;
+            scrollbar-width: none; -ms-overflow-style: none; 
+        }
         #main-toolbar::-webkit-scrollbar { display: none; }
         #main-toolbar .logo { font-weight: bold; font-size: 1.2em; margin-right: 15px; color: white; }
         #main-toolbar button { background-color: var(--cor-botao-normal); color: white; border: none; padding: 8px 12px; cursor: pointer; border-radius: 4px; font-size: 0.9em; transition: background-color 0.2s; display: inline-flex; align-items: center; gap: 5px; flex-shrink: 0; }
         #main-toolbar button:hover { background-color: var(--cor-botao-hover); }
         #main-toolbar button.ativo { background-color: var(--cor-botao-ativo); }
         #main-toolbar button.ativo:hover { background-color: #0056b3; }
-        #main-content-container { display: flex; flex-direction: column; flex-grow: 1; overflow: hidden; padding: 10px; box-sizing: border-box; }
-        #cena-3d { flex-grow: 1; background-color: #111; border: 1px solid var(--cor-borda); border-radius: 4px; overflow: hidden; position: relative; margin-bottom: 10px; min-height: 250px; }
+        
+        #main-content-container { 
+            display: flex; 
+            flex-direction: column; /* Empilha verticalmente em mobile */
+            flex-grow: 1; 
+            overflow: hidden; 
+            padding: var(--padding-geral); 
+            box-sizing: border-box; 
+            gap: var(--padding-geral);
+        }
+        #cena-3d { 
+            flex-grow: 1; /* Ocupa o espaço disponível */
+            background-color: #111; 
+            border: 1px solid var(--cor-borda); 
+            border-radius: 4px; 
+            overflow: hidden; 
+            position: relative; 
+            min-height: 200px; /* Altura mínima para mobile */
+        }
         #cena-3d canvas { display: block; width: 100%; height: 100%; }
         
-        #left-panel { background-color: var(--cor-painel); border: 1px solid var(--cor-borda); border-radius: 4px; padding: 10px; box-sizing: border-box; display: none; flex-direction: column; gap: 10px; height: auto; width: 150px; flex-shrink: 0; }
-        #right-panel-container { /* NOVO Container para right-panel e file-manager-panel */
+        #left-panel { 
+            background-color: var(--cor-painel); border: 1px solid var(--cor-borda); 
+            border-radius: 4px; padding: var(--padding-geral); box-sizing: border-box; 
+            display: none; /* Controlado por JS e media query */
+            flex-direction: column; gap: 10px; 
+            width: 200px; /* Largura para desktop */
+            flex-shrink: 0;
+            overflow-y: auto;
+        }
+        #right-panel-container { 
             background-color: var(--cor-painel); 
             border: 1px solid var(--cor-borda); 
             border-radius: 4px; 
-            padding: 0; /* Padding agora nos filhos */
             box-sizing: border-box; 
-            display: none; /* Escondido por padrão em mobile */
+            display: none; /* Controlado por JS e media query */
             flex-direction: column; 
             width: 300px; 
             flex-shrink: 0;
-            height: auto; /* Ou altura específica se necessário */
+            overflow: hidden; /* Importante para o conteúdo interno */
         }
         .panel-tabs {
             display: flex;
             border-bottom: 1px solid var(--cor-borda);
+            flex-shrink: 0; /* Não encolhe */
         }
         .panel-tabs button {
             flex-grow: 1;
@@ -116,25 +152,28 @@
             cursor: pointer;
             font-size: 0.9em;
             transition: background-color 0.2s;
-            border-radius: 0; /* Remove borda arredondada para abas */
+            border-radius: 0; 
         }
         .panel-tabs button:first-child { border-top-left-radius: 3px; }
         .panel-tabs button:last-child { border-top-right-radius: 3px; }
         .panel-tabs button:hover { background-color: var(--cor-botao-hover); }
         .panel-tabs button.ativo { background-color: var(--cor-botao-ativo); }
 
-        #right-panel, #file-manager-panel { /* Ajustes para os painéis internos */
-            padding: 10px; /* Mantém o padding interno */
-            border: none; /* Remove bordas individuais, pois o container tem */
-            border-radius: 0; /* Remove bordas arredondadas */
-            flex-grow: 1; /* Para ocupar o espaço do container */
-            overflow-y: auto; /* Permite scroll interno */
+        #right-panel, #file-manager-panel { 
+            padding: var(--padding-geral); 
+            border: none; 
+            border-radius: 0; 
+            flex-grow: 1; 
+            overflow-y: auto; 
+            display: none; /* Controlado por JS */
         }
-
+        #right-panel.visivel, #file-manager-panel.visivel {
+            display: flex; /* Mostra a aba ativa */
+            flex-direction: column; /* Garante que o conteúdo interno se empilhe */
+        }
 
         #left-panel h4, #right-panel h4, #file-manager-panel h4 { margin-top: 0; margin-bottom: 10px; color: var(--cor-texto); border-bottom: 1px solid var(--cor-borda); padding-bottom: 5px; }
         
-        /* Hierarquia de Objetos */
         #object-hierarchy { list-style: none; padding: 0; margin: 0; overflow-y: auto; flex-grow: 1; }
         #object-hierarchy li { padding: 3px 5px; cursor: pointer; border-radius: 3px; margin-bottom: 1px; display: flex; align-items: center; font-size: 0.9em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         #object-hierarchy li:hover { background-color: var(--cor-botao-hover); }
@@ -148,27 +187,28 @@
         #object-hierarchy li > i { margin-right: 5px; }
 
 
-        #object-properties { flex-grow: 1; overflow-y: auto; padding-right: 5px; margin-bottom: 10px; }
+        #object-properties { flex-grow: 1; /* Para ocupar espaço no #right-panel */ }
         #object-properties label { display: block; margin-bottom: 5px; font-size: 0.9em; font-weight: bold; }
         #object-properties input[type="text"], #object-properties input[type="number"], #object-properties input[type="color"], #object-properties select { width: calc(100% - 12px); padding: 8px; margin-bottom: 10px; border: 1px solid #555; background-color: var(--cor-borda); color: var(--cor-texto); border-radius: 4px; font-size: 0.9em; box-sizing: border-box; }
         #object-properties input[type="color"] { height: 38px; padding: 2px; }
-        #object-properties input[type="range"] { width: 100%; margin-bottom: 10px; }
         .prop-row { display: flex; gap: 5px; margin-bottom: 5px; align-items: center; }
-        .prop-row .prop-label { width: 20px; text-align: center; font-weight: bold; color: #ccc; }
-        .prop-row input { margin-bottom: 0 !important; }
+        .prop-row .prop-label { width: 20px; text-align: center; font-weight: bold; color: #ccc; flex-shrink: 0;}
+        .prop-row input { margin-bottom: 0 !important; flex-grow: 1; }
         .texture-input-row { display: flex; align-items: center; gap: 5px; margin-bottom: 10px; }
         .texture-input-row input[type="text"] { flex-grow: 1; margin: 0; font-size: 0.8em; }
         .texture-input-row button { padding: 8px; font-size: 0.8em; flex-shrink: 0; background-color: var(--cor-botao-normal); border: none; color: white; border-radius: 4px; cursor: pointer;}
         .texture-input-row button:hover { background-color: var(--cor-botao-hover); }
         .property-group { border: 1px solid var(--cor-borda); border-radius: 5px; padding: 10px; margin-bottom: 10px; background-color: #2a2a2a; }
         .property-group h5 { margin-top: 0; margin-bottom: 10px; color: var(--cor-texto); font-size: 1em; }
+        
+        /* Código Editor, Console e Modais (sem grandes mudanças de layout aqui) */
         #codigo-editor-container { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 80vw; height: 60vh; z-index: 1000; background-color: var(--cor-editor-console); border: 1px solid var(--cor-borda); border-radius: 8px; box-shadow: 0 5px 15px rgba(0,0,0,0.5); display: none; flex-direction: column; overflow: hidden; }
         #codigo-editor-container.visivel { display: flex; }
         #codigo-editor { flex-grow: 1; width: 100%; height: 100%; font-family: 'Consolas', 'Monaco', 'Lucida Console', monospace; font-size: 0.9em; }
         #codigo-editor-header { background-color: #2a2a2a; padding: 8px 10px; border-bottom: 1px solid var(--cor-borda); display: flex; justify-content: flex-end; gap: 10px; flex-shrink: 0; }
         #codigo-editor-header button { background-color: var(--cor-botao-normal); color: white; border: none; padding: 6px 10px; cursor: pointer; border-radius: 4px; font-size: 0.8em; transition: background-color 0.2s; display: inline-flex; align-items: center; gap: 5px; }
         #codigo-editor-header button:hover { background-color: var(--cor-botao-hover); }
-        #bottom-panel { background-color: var(--cor-painel); border: 1px solid var(--cor-borda); border-radius: 4px; box-sizing: border-box; display: flex; flex-direction: column; height: var(--altura-console-mobile); flex-shrink: 0; margin: 10px; margin-top: 0; }
+        #bottom-panel { background-color: var(--cor-painel); border: 1px solid var(--cor-borda); border-radius: 4px; box-sizing: border-box; display: flex; flex-direction: column; flex-shrink: 0; margin: var(--padding-geral); margin-top: 0; height: var(--altura-console-mobile);}
         #bottom-panel.hidden { display: none; }
         #console-header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; padding: 5px 10px; background-color: #2a2a2a; border-bottom: 1px solid var(--cor-borda); flex-shrink: 0; gap: 10px; }
         #console-header h3 { margin: 0; font-size: 1em; color: var(--cor-texto); flex-shrink: 0; }
@@ -193,153 +233,40 @@
         .modal-botoes button:last-child { background-color: #007bff; color: white; }
         #settings-fog-enabled, #prop-physics-enabled { width: auto; margin-left: 5px; vertical-align: middle; }
 
-        /* Estilos para o Gerenciador de Arquivos */
-        #file-manager-panel { /* Ajustado para ser filho do container */
-            display: none; /* Escondido por padrão, controlado por JS */
-            flex-direction: column;
-            gap: 10px;
-            flex-grow: 1;
-            overflow-y: auto;
-        }
-        #file-manager-panel.visivel {
-            display: flex;
-        }
-        /* ... (restante dos estilos do file-manager) ... */
-        #file-manager-controls button {
-            background-color: var(--cor-botao-normal);
-            color: white;
-            border: none;
-            padding: 6px 10px;
-            cursor: pointer;
-            border-radius: 4px;
-            font-size: 0.8em;
-            transition: background-color 0.2s;
-            display: inline-flex;
-            align-items: center;
-            gap: 5px;
-        }
-        #file-manager-controls button:hover {
-            background-color: var(--cor-botao-hover);
-        }
-        #file-tree-container {
-            flex-grow: 1;
-            overflow-y: auto;
-            border: 1px solid var(--cor-borda);
-            border-radius: 4px;
-            padding: 5px;
-            background-color: #2a2a2a;
-        }
-        #file-tree {
-            list-style: none;
-            padding: 0;
-            margin: 0;
-            font-size: 0.9em;
-        }
-        #file-tree li {
-            padding: 3px 5px;
-            cursor: pointer;
-            border-radius: 3px;
-            margin-bottom: 1px;
-            display: flex;
-            align-items: center;
-        }
-        #file-tree li:hover {
-            background-color: var(--cor-botao-hover);
-        }
-        #file-tree li.selected-file {
-            background-color: var(--cor-botao-ativo);
-            font-weight: bold;
-        }
-        #file-tree li i {
-            margin-right: 5px;
-            color: #aaa;
-        }
-        #file-tree ul { /* Sub-pastas */
-            list-style: none;
-            padding-left: 15px;
-        }
-        #file-path-display {
-            font-size: 0.85em;
-            color: #bbb;
-            margin-bottom: 5px;
-            white-space: nowrap;
-            overflow-x: auto;
-            scrollbar-width: none;
-            -ms-overflow-style: none;
-        }
-        #file-path-display::-webkit-scrollbar {
-            display: none;
-        }
-        .context-menu {
-            position: absolute;
-            background-color: var(--cor-painel);
-            border: 1px solid var(--cor-borda);
-            border-radius: 4px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.5);
-            z-index: 1001;
-            padding: 5px 0;
-            display: none;
-        }
-        .context-menu button {
-            display: block;
-            width: 100%;
-            text-align: left;
-            padding: 8px 15px;
-            background: none;
-            border: none;
-            color: var(--cor-texto);
-            cursor: pointer;
-            font-size: 0.9em;
-        }
-        .context-menu button:hover {
-            background-color: var(--cor-botao-hover);
-        }
-        #modal-save-firebase, #modal-load-firebase, #modal-input {
-            z-index: 1010; 
-        }
-        #modal-load-firebase .project-list {
-            list-style: none;
-            padding: 0;
-            margin: 0;
-            max-height: 250px;
-            overflow-y: auto;
-            border: 1px solid var(--cor-borda);
-            border-radius: 4px;
-            background-color: #2a2a2a;
-            margin-bottom: 15px;
-        }
-        #modal-load-firebase .project-list li {
-            padding: 8px 10px;
-            border-bottom: 1px solid #3a3a3a;
-            cursor: pointer;
-            transition: background-color 0.1s;
-        }
-        #modal-load-firebase .project-list li:last-child {
-            border-bottom: none;
-        }
-        #modal-load-firebase .project-list li:hover {
-            background-color: var(--cor-botao-hover);
-        }
-        #modal-load-firebase .project-list li.selected {
-            background-color: var(--cor-botao-ativo);
-            font-weight: bold;
-        }
-        #modal-load-firebase .project-list li span.date {
-            font-size: 0.8em;
-            color: #aaa;
-            float: right;
-        }
+        /* Gerenciador de Arquivos */
+        #file-manager-controls { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 10px; }
+        #file-tree-container { flex-grow: 1; overflow-y: auto; border: 1px solid var(--cor-borda); border-radius: 4px; padding: 5px; background-color: #2a2a2a; }
+        #file-tree { list-style: none; padding: 0; margin: 0; font-size: 0.9em; }
+        #file-tree li { padding: 3px 5px; cursor: pointer; border-radius: 3px; margin-bottom: 1px; display: flex; align-items: center; }
+        #file-tree li:hover { background-color: var(--cor-botao-hover); }
+        #file-tree li.selected-file { background-color: var(--cor-botao-ativo); font-weight: bold; }
+        #file-tree li i { margin-right: 5px; color: #aaa; }
+        #file-tree ul { list-style: none; padding-left: 15px; }
+        #file-path-display { font-size: 0.85em; color: #bbb; margin-bottom: 5px; white-space: nowrap; overflow-x: auto; scrollbar-width: none; -ms-overflow-style: none; }
+        #file-path-display::-webkit-scrollbar { display: none; }
+        .context-menu { position: absolute; background-color: var(--cor-painel); border: 1px solid var(--cor-borda); border-radius: 4px; box-shadow: 0 2px 5px rgba(0,0,0,0.5); z-index: 1001; padding: 5px 0; display: none; }
+        .context-menu button { display: block; width: 100%; text-align: left; padding: 8px 15px; background: none; border: none; color: var(--cor-texto); cursor: pointer; font-size: 0.9em; }
+        .context-menu button:hover { background-color: var(--cor-botao-hover); }
+        #modal-save-firebase, #modal-load-firebase, #modal-input { z-index: 1010; }
+        #modal-load-firebase .project-list { list-style: none; padding: 0; margin: 0; max-height: 250px; overflow-y: auto; border: 1px solid var(--cor-borda); border-radius: 4px; background-color: #2a2a2a; margin-bottom: 15px; }
+        #modal-load-firebase .project-list li { padding: 8px 10px; border-bottom: 1px solid #3a3a3a; cursor: pointer; transition: background-color 0.1s; }
+        #modal-load-firebase .project-list li:last-child { border-bottom: none; }
+        #modal-load-firebase .project-list li:hover { background-color: var(--cor-botao-hover); }
+        #modal-load-firebase .project-list li.selected { background-color: var(--cor-botao-ativo); font-weight: bold; }
+        #modal-load-firebase .project-list li span.date { font-size: 0.8em; color: #aaa; float: right; }
 
-        /* NOVOS Estilos para controles no canvas */
+        /* Controles no Canvas */
         #canvas-controls-toolbar {
             position: absolute;
-            top: 10px;
-            left: 10px;
+            top: 5px; /* Ajustado para não colar na borda */
+            left: 5px;
             background-color: rgba(51, 51, 51, 0.8);
             padding: 5px;
             border-radius: 4px;
-            display: none; /* Escondido por padrão, visível quando objeto selecionado */
+            display: none; 
             z-index: 10;
+            flex-direction: row; /* Botões em linha */
+            gap: 5px;
         }
         #canvas-controls-toolbar button {
             background-color: var(--cor-botao-normal);
@@ -348,8 +275,7 @@
             padding: 6px 8px;
             cursor: pointer;
             border-radius: 3px;
-            font-size: 0.9em;
-            margin: 2px;
+            font-size: 1em; /* Aumenta um pouco para melhor toque */
             transition: background-color 0.2s;
         }
         #canvas-controls-toolbar button:hover {
@@ -360,20 +286,20 @@
         }
         #canvas-delete-button {
             position: absolute;
-            bottom: 10px;
-            left: 10px;
-            background-color: rgba(220, 53, 69, 0.8); /* Vermelho */
+            bottom: 5px; /* Ajustado */
+            left: 5px;
+            background-color: rgba(220, 53, 69, 0.8); 
             color: white;
             border: none;
-            width: 35px;
-            height: 35px;
+            width: 40px; /* Aumentado para melhor toque */
+            height: 40px;
             border-radius: 50%;
-            display: none; /* Escondido por padrão */
+            display: none; 
             align-items: center;
             justify-content: center;
             cursor: pointer;
             z-index: 10;
-            font-size: 1.1em;
+            font-size: 1.2em; /* Aumentado */
         }
         #canvas-delete-button:hover {
             background-color: rgba(200, 33, 49, 1);
@@ -381,15 +307,15 @@
 
 
         @media (min-width: 768px) {
-            #main-content-container { flex-direction: row; align-items: stretch; justify-content: space-between; }
-            #left-panel { display: flex; width: 180px; margin-right: 10px; }
-             #right-panel-container { /* Ajuste para desktop */
+            #main-content-container { flex-direction: row; align-items: stretch; justify-content: space-between; height: calc(100vh - var(--altura-toolbar) - (2 * var(--padding-geral)) - var(--altura-console-desktop) - var(--padding-geral)); } /* Ajusta altura para desktop */
+            #left-panel { display: flex; width: 220px; margin-right: var(--padding-geral); }
+             #right-panel-container { 
                 display: flex; 
-                width: 300px; 
+                width: 320px; 
                 margin-left: 0; 
-                order: 2; /* Ordem para aparecer depois da cena */
+                order: 2; 
             }
-            #cena-3d { margin-left: 0; margin-right: 10px; margin-bottom: 0; order: 1;}
+            #cena-3d { margin-left: 0; margin-right: var(--padding-geral); margin-bottom: 0; order: 1;}
             
             #codigo-editor-container { width: 60vw; height: 70vh; }
             #bottom-panel { height: var(--altura-console-desktop); }
@@ -428,18 +354,18 @@
             </div>
             <button id="canvas-delete-button" title="Remover Objeto Selecionado"><i class="fas fa-trash-alt"></i></button>
         </div>
-        <!-- NOVO CONTAINER PARA PAINEL DIREITO E GERENCIADOR DE ARQUIVOS -->
+        <!-- CONTAINER PARA PAINEL DIREITO E GERENCIADOR DE ARQUIVOS -->
         <div id="right-panel-container">
             <div class="panel-tabs">
                 <button id="btn-tab-properties" class="ativo"><i class="fas fa-sliders-h"></i> Propriedades</button>
                 <button id="btn-tab-files"><i class="fas fa-folder-open"></i> Arquivos</button>
             </div>
-            <div id="right-panel"> <!-- Mantém ID para compatibilidade, mas agora é filho do container -->
-                <!-- <h4> removido daqui, agora é dinâmico -->
+            <div id="right-panel" class="visivel"> <!-- Começa visível -->
+                <!-- O h4 foi removido, o título é implícito pela aba -->
                 <div id="object-properties"><p>Selecione um objeto para ver suas propriedades.</p></div>
             </div>
-            <div id="file-manager-panel"> <!-- Agora também é filho do container -->
-                <!-- <h4> removido daqui -->
+            <div id="file-manager-panel"> <!-- Começa escondido -->
+                 <h4><i class="fas fa-folder-open"></i> Gerenciador de Arquivos</h4> <!-- Título volta para cá -->
                 <div id="file-manager-controls">
                     <input type="file" id="file-upload-input" multiple style="display:none;">
                     <button id="btn-upload-file" title="Upload de Arquivo"><i class="fas fa-upload"></i> Upload</button>
@@ -661,7 +587,6 @@
             btnSaveFirebase: document.getElementById('btn-save-firebase'),
             btnLoadFirebase: document.getElementById('btn-load-firebase'),
 
-            // BOTÕES DE TRANSFORMAÇÃO NO CANVAS
             canvasControlsToolbar: document.getElementById('canvas-controls-toolbar'),
             btnModoTranslate: document.getElementById('btn-modo-translate'),
             btnModoRotate: document.getElementById('btn-modo-rotate'),
@@ -673,10 +598,10 @@
             ctxSetParent: document.getElementById('ctx-set-parent'), 
             ctxRemoveParent: document.getElementById('ctx-remove-parent'), 
             objectProperties: document.getElementById('object-properties'),
-            rightPanelContainer: document.getElementById('right-panel-container'), // NOVO
-            btnTabProperties: document.getElementById('btn-tab-properties'),       // NOVO
-            btnTabFiles: document.getElementById('btn-tab-files'),                 // NOVO
-            rightPanel: document.getElementById('right-panel'),                    // NOVO
+            rightPanelContainer: document.getElementById('right-panel-container'), 
+            btnTabProperties: document.getElementById('btn-tab-properties'),       
+            btnTabFiles: document.getElementById('btn-tab-files'),                 
+            rightPanel: document.getElementById('right-panel'),                    
 
             bottomPanel: document.getElementById('bottom-panel'),
             consoleOutput: document.getElementById('console-output'),
@@ -753,7 +678,7 @@
             updateConsoleFilter('all');
             loadGraphicSettingsUI();
             renderFileTree(); 
-            showPropertiesPanel(); // Mostra o painel de propriedades por padrão
+            showPropertiesPanel(); 
         }
         
         function createDefaultWorldIfNotExists() {
@@ -771,7 +696,6 @@
             }
 
             if (mundosFolder && !mundosFolder[defaultWorldName]) {
-                // Cena inicial vazia
                 const defaultScriptContent = `// Mundo Padrão - Motor Monkey\nconsole.log("Mundo Padrão Carregado!");\n`;
                 mundosFolder[defaultWorldName] = {
                     type: 'script',
@@ -1104,7 +1028,6 @@
                         isPickingChild = false;
                         prospectiveParentId = null;
                         document.body.style.cursor = 'default';
-                        // Remove o listener global após a seleção ou cancelamento
                         document.removeEventListener('keydown', handlePickingChildEscape, true);
                         document.removeEventListener('click', handlePickingChildClick, true);
                     } else {
@@ -1143,7 +1066,7 @@
             event.preventDefault();
             event.stopPropagation(); 
             hideFileContextMenu(); 
-            hideObjectHierarchyContextMenu(); // Esconde qualquer um aberto
+            hideObjectHierarchyContextMenu(); 
 
             const obj = motor.getObjetosNaCena()[objectId];
             if (!obj) return;
@@ -1176,15 +1099,16 @@
         }
 
         function handlePickingChildClick(e) {
-            // Verifica se o clique não foi em um botão de UI que poderia ter seu próprio handler
-            if (e.target.closest('button, input, select, textarea, .context-menu, .modal-overlay')) {
-                return;
-            }
-             // Se o clique foi na cena ou hierarquia e não no objeto pai, finaliza
-            if (isPickingChild && !e.target.closest(`[data-id="${prospectiveParentId}"]`)) {
-                isPickingChild = false;
-                prospectiveParentId = null;
-                document.body.style.cursor = 'default';
+            if (isPickingChild && !e.target.closest('button, input, select, textarea, .context-menu, .modal-overlay')) {
+                // Se o clique não foi em um objeto válido da hierarquia, cancela
+                const clickedLi = e.target.closest('#object-hierarchy li');
+                if (!clickedLi || !clickedLi.dataset.id) {
+                    isPickingChild = false;
+                    prospectiveParentId = null;
+                    document.body.style.cursor = 'default';
+                    logConsole('info', 'Seleção de filho cancelada (clique fora de um objeto).');
+                }
+                // A lógica de definir o pai acontece no event listener do clique do item da hierarquia
                 document.removeEventListener('keydown', handlePickingChildEscape, true);
                 document.removeEventListener('click', handlePickingChildClick, true);
             }
@@ -1199,7 +1123,6 @@
             document.body.style.cursor = 'crosshair'; 
             logConsole('info', `Selecione um objeto na cena ou na hierarquia para torná-lo filho de "${motor.getObjetosNaCena()[prospectiveParentId].name || prospectiveParentId}". Pressione ESC para cancelar.`);
             hideObjectHierarchyContextMenu();
-            // Adiciona listeners globais para cancelar ou confirmar a seleção do filho
             document.addEventListener('keydown', handlePickingChildEscape, true);
             document.addEventListener('click', handlePickingChildClick, true);
         }
@@ -1224,25 +1147,25 @@
 
         function selecionarObjeto(id) { 
             if(isPlaying) return; 
-            if (isPickingChild) { // NOVO: Lógica para seleção de filho
+            if (isPickingChild) { 
                 if (prospectiveParentId && prospectiveParentId !== id) {
                      motor.setParent(id, prospectiveParentId);
                      updateHierarchy();
-                     logConsole('info', `Objeto "${motor.getObjetosNaCena()[id].name || id}" definido como filho de "${motor.getObjetosNaCena()[prospectiveParentId].name || prospectiveParentId}".`);
+                     logConsole('info', `Objeto "${motor.getObjetosNaCena()[id]?.name || id}" definido como filho de "${motor.getObjetosNaCena()[prospectiveParentId]?.name || prospectiveParentId}".`);
                 }
                 isPickingChild = false;
                 prospectiveParentId = null;
                 document.body.style.cursor = 'default';
                 document.removeEventListener('keydown', handlePickingChildEscape, true);
                 document.removeEventListener('click', handlePickingChildClick, true);
-                // Após definir o pai, não seleciona o filho automaticamente, mantém o pai selecionado
-                // ou desseleciona tudo, dependendo da UX desejada. Por ora, mantém o pai.
+                
                 if (objetoSelecionadoId === prospectiveParentId) {
-                    // Não faz nada, já está selecionado
+                    // Mantém o pai selecionado
                 } else if (prospectiveParentId) {
-                    selecionarObjeto(prospectiveParentId); // Re-seleciona o pai
+                    // Seleciona o pai se ele não era o objeto selecionado
+                    selecionarObjeto(prospectiveParentId); 
                 }
-                return; // Impede a seleção normal do objeto clicado
+                return; 
             }
 
             objetoSelecionadoId = id; 
@@ -1272,7 +1195,7 @@
             if (threeObj.position) {
                 const pos = threeObj.position;
                 const rot = threeObj.rotation;
-                const scale = threeObj.scale; // NOVO: Pega a escala
+                const scale = threeObj.scale; 
                 html += `<div class="property-group"><h5>Transform</h5>
                     <div class="prop-row"><span class="prop-label">P</span>
                         <input type="number" step="0.1" value="${pos.x.toFixed(2)}" data-prop="position.x" data-type="float">
@@ -1284,7 +1207,7 @@
                         <input type="number" step="1" value="${(rot.y * 180 / Math.PI).toFixed(1)}" data-prop="rotation.y" data-type="degrees">
                         <input type="number" step="1" value="${(rot.z * 180 / Math.PI).toFixed(1)}" data-prop="rotation.z" data-type="degrees">
                     </div>
-                    <div class="prop-row"><span class="prop-label">S</span> <!-- NOVO: Linha de Escala -->
+                    <div class="prop-row"><span class="prop-label">S</span> 
                         <input type="number" step="0.1" value="${scale.x.toFixed(2)}" data-prop="scale.x" data-type="float">
                         <input type="number" step="0.1" value="${scale.y.toFixed(2)}" data-prop="scale.y" data-type="float">
                         <input type="number" step="0.1" value="${scale.z.toFixed(2)}" data-prop="scale.z" data-type="float">
@@ -1292,7 +1215,6 @@
                 </div>`;
             }
 
-            // PROPRIEDADES DA CÂMERA DE JOGO
             if (obj.type === 'camera_jogo') {
                 html += `<div class="property-group"><h5>Câmera de Jogo</h5>
                     <label>FOV: <input type="number" step="1" value="${obj.threeObj.fov.toFixed(1)}" data-prop="fov" data-type="float"></label>
@@ -1325,7 +1247,6 @@
                 </div>`;
             }
 
-            // Grupo de propriedades da Física
             if (obj.physicsProperties) { 
                 const physicsProps = obj.physicsProperties;
                 html += `<div class="property-group"><h5>Física</h5>
@@ -1350,8 +1271,6 @@
                     </div>
                 </div>`;
             }
-            
-            // Botão de deletar foi movido para o canvas
             
             ui.objectProperties.innerHTML = html;
             addPropertyListeners(id); 
@@ -1418,7 +1337,6 @@
                     reader.readAsDataURL(file);
                 });
             });
-            // O botão de deletar foi movido para o canvas.
         }
         
         // --- Funções de Configuração Gráfica na UI ---
@@ -1864,8 +1782,8 @@
             ui.btnModoScale.onclick = () => setTransformMode('scale');
             ui.canvasDeleteButton.onclick = () => {
                 if (objetoSelecionadoId) {
-                    motor.removerObjeto(objetoSelecionadoId); // Remove o objeto do motor
-                    // A UI será atualizada por `objetoDesselecionado` se o objeto removido era o selecionado
+                    motor.removerObjeto(objetoSelecionadoId); 
+                    // A UI será atualizada pelo evento 'objetoDesselecionado'
                 }
             };
 
@@ -1939,7 +1857,6 @@
             });
 
             // Listeners para o Gerenciador de Arquivos
-            // ui.btnToggleFileManager.onclick = () => ui.fileManagerPanel.classList.toggle('visivel'); // Removido
             ui.btnUploadFile.onclick = () => ui.fileUploadInput.click(); 
             ui.fileUploadInput.onchange = handleUploadFile;
             ui.btnBackFolder.onclick = () => { if (currentPath.length > 0) { currentPath.pop(); renderFileTree(); } };
