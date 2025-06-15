@@ -1,5 +1,3 @@
-
-
 class MotorJM {
     /**
      * Construtor da classe MotorJM.
@@ -49,7 +47,7 @@ class MotorJM {
         // --- Inicialização ---
         this._configurarRenderizador();
         this._configurarCamera();
-        this._configurarIluminacaoPadrao(); // Será chamado de forma mais controlada
+        // REMOVIDO: this._configurarIluminacaoPadrao(); // Será chamado de forma mais controlada APÓS o script do mundo
         this._configurarMundoFisica();
         this._configurarControles();
         this._configurarEventos();
@@ -82,6 +80,7 @@ class MotorJM {
 
     _configurarIluminacaoPadrao() {
         // Agora esta função só é chamada se o script do mundo não adicionar suas próprias luzes
+        // Ou seja, é um fallback após a execução do script
         if (!Object.values(this.objetosNaCena).some(obj => obj.type.startsWith('luz_') && !obj.id.endsWith('_padrao_removivel'))) {
             this.adicionarLuz('luz_ambiente_padrao_removivel', 'Ambiente Padrão', { type: 'ambiente', color: 0xffffff, intensity: 0.3 });
             this.adicionarLuz('luz_direcional_padrao_removivel', 'Direcional Padrão', { type: 'direcional', color: 0xffffff, intensity: 1, position: new THREE.Vector3(10, 20, 10), castShadow: true });
@@ -299,6 +298,8 @@ class MotorJM {
                     position: threeObj.position.clone(),
                     quaternion: threeObj.quaternion.clone(),
                 },
+                childrenIds: [], // Adicionado para hierarquia
+                parentId: null,  // Adicionado para hierarquia
             };
             this.objetosNaCena[id] = newObj;
             return newObj;
@@ -366,6 +367,8 @@ class MotorJM {
                     quaternion: threeObj.quaternion.clone(),
                 },
                 physicsProperties, 
+                childrenIds: [], // Adicionado para hierarquia
+                parentId: null,  // Adicionado para hierarquia
             };
             this.objetosNaCena[id] = newObj;
 
@@ -393,7 +396,7 @@ class MotorJM {
         } else if (obj.physicsProperties.bodyType === 'static') {
             finalMass = 0; 
             obj.physicsProperties.mass = 0; 
-        } else { 
+        } else { // bodyType 'none'
             obj.collisionWireframe.material.color.set(this._traduzirCor('vermelho')); 
             obj.collisionWireframe.material.needsUpdate = true;
             return;
@@ -499,7 +502,11 @@ class MotorJM {
                 return;
         }
         this.cena.add(luz); 
-        this.objetosNaCena[id] = { id, name, type: `luz_${opcoes.type}`, threeObj: luz };
+        this.objetosNaCena[id] = { 
+            id, name, type: `luz_${opcoes.type}`, threeObj: luz,
+            childrenIds: [], // Adicionado para hierarquia
+            parentId: null,  // Adicionado para hierarquia
+        };
         console.log(`MotorJM (Info Luz): Luz '${name}' (ID: ${id}, Tipo: ${opcoes.type}) adicionada.`);
     }
 
@@ -514,8 +521,10 @@ class MotorJM {
             this.desselecionarObjeto();
         }
 
+        // Remove from Three.js scene
         this.cena.remove(obj.threeObj); 
         
+        // Dispose of Three.js resources
         if (obj.threeObj.isMesh) {
             obj.threeObj.geometry.dispose();
             if (obj.collisionWireframe) {
@@ -536,10 +545,30 @@ class MotorJM {
                 if (obj.cameraHelper.material) obj.cameraHelper.material.dispose();
                 if (obj.cameraHelper.geometry) obj.cameraHelper.geometry.dispose();
             }
+        } else if (obj.threeObj.isLight) { // For lights, just remove from scene
+            // No specific geometry/material to dispose for standard lights
         }
         
+        // Remove from Cannon.js world
         if (obj.cannonBody) {
             this.mundoFisica.removeBody(obj.cannonBody);
+        }
+
+        // Handle hierarchy: remove from parent's children list
+        if (obj.parentId) {
+            const parent = this.objetosNaCena[obj.parentId];
+            if (parent && parent.childrenIds) {
+                parent.childrenIds = parent.childrenIds.filter(childId => childId !== id);
+            }
+        }
+        // Handle hierarchy: set children's parent to null (making them root)
+        if (obj.childrenIds) {
+            obj.childrenIds.forEach(childId => {
+                const child = this.objetosNaCena[childId];
+                if (child) {
+                    child.parentId = null;
+                }
+            });
         }
         
         delete this.objetosNaCena[id]; 
@@ -589,6 +618,96 @@ class MotorJM {
 
 
     // --- MÉTODOS DE MANIPULAÇÃO E INTERAÇÃO ---
+
+    // NOVOS MÉTODOS PARA GERENCIAR HIERARQUIA DE OBJETOS (Three.js parenting not implemented here)
+    setParent(childId, parentId) {
+        const childObj = this.objetosNaCena[childId];
+        const parentObj = this.objetosNaCena[parentId];
+
+        if (!childObj || !parentObj) {
+            console.warn(`MotorJM (Aviso Hierarquia): Não foi possível definir pai. Objeto filho '${childId}' ou pai '${parentId}' não encontrado.`);
+            return;
+        }
+        
+        if (childObj.id === parentId) {
+            console.warn(`MotorJM (Aviso Hierarquia): Um objeto não pode ser pai de si mesmo.`);
+            return;
+        }
+
+        // Prevenindo ciclos infinitos
+        let current = parentObj;
+        while (current) {
+            if (current.id === childId) {
+                console.warn(`MotorJM (Aviso Hierarquia): Definição de pai criaria um ciclo. Operação cancelada.`);
+                return;
+            }
+            current = this.objetosNaCena[current.parentId];
+        }
+
+        // Remove child from old parent's childrenIds list if it had one
+        if (childObj.parentId) {
+            const oldParent = this.objetosNaCena[childObj.parentId];
+            if (oldParent && oldParent.childrenIds) {
+                oldParent.childrenIds = oldParent.childrenIds.filter(id => id !== childId);
+            }
+        }
+
+        childObj.parentId = parentId;
+        if (!parentObj.childrenIds) {
+            parentObj.childrenIds = [];
+        }
+        if (!parentObj.childrenIds.includes(childId)) {
+            parentObj.childrenIds.push(childId);
+        }
+
+        // Mova a representação Three.js do filho para ser um filho do pai NO CENA THREE.JS
+        // AVISO: Isso pode afetar a posição global do filho!
+        // Se a posição/rotação do filho precisar ser mantida no espaço global,
+        // você precisaria converter a posição/quaternion do filho para o sistema de coordenadas do pai
+        // ANTES de adicionar e então aplicar essa nova posição/rotação local.
+        // Por simplicidade, este exemplo apenas anexa o objeto Three.js.
+        if (childObj.threeObj && parentObj.threeObj) {
+            // childObj.threeObj.matrixWorld.decompose(childObj.threeObj.position, childObj.threeObj.quaternion, childObj.threeObj.scale); // Conserva a transformação global
+            // parentObj.threeObj.attach(childObj.threeObj); // THREE.js r125+
+            // OU
+            if (childObj.threeObj.parent) {
+                childObj.threeObj.parent.remove(childObj.threeObj);
+            }
+            parentObj.threeObj.add(childObj.threeObj);
+        }
+
+        console.log(`MotorJM (Info Hierarquia): Objeto '${childObj.name || childId}' definido como filho de '${parentObj.name || parentId}'.`);
+    }
+
+    removeParent(childId) {
+        const childObj = this.objetosNaCena[childId];
+        if (!childObj || !childObj.parentId) {
+            console.warn(`MotorJM (Aviso Hierarquia): Objeto '${childId}' não possui pai para remover.`);
+            return;
+        }
+
+        const parentObj = this.objetosNaCena[childObj.parentId];
+        if (parentObj && parentObj.childrenIds) {
+            parentObj.childrenIds = parentObj.childrenIds.filter(id => id !== childId);
+        }
+        childObj.parentId = null;
+
+        // Move a representação Three.js do filho para a cena raiz (global)
+        // AVISO: Isso pode afetar a posição global do filho!
+        // Se a posição/rotação do filho precisar ser mantida no espaço global,
+        // você precisaria converter a posição/quaternion do filho para o sistema de coordenadas global
+        // ANTES de remover e então aplicar essa nova posição/rotação global.
+        // Por simplicidade, este exemplo apenas anexa o objeto Three.js de volta à cena.
+        if (childObj.threeObj && childObj.threeObj.parent) {
+            // childObj.threeObj.matrixWorld.decompose(childObj.threeObj.position, childObj.threeObj.quaternion, childObj.threeObj.scale); // Conserva a transformação global
+            // this.cena.attach(childObj.threeObj); // THREE.js r125+
+            // OU
+            childObj.threeObj.parent.remove(childObj.threeObj);
+            this.cena.add(childObj.threeObj);
+        }
+        console.log(`MotorJM (Info Hierarquia): Objeto '${childObj.name || childId}' tornou-se raiz.`);
+    }
+    // FIM DOS NOVOS MÉTODOS PARA GERENCIAR HIERARQUIA DE OBJETOS
 
     selecionarObjeto(id) {
         if (!id || !this.objetosNaCena[id]) {
@@ -836,9 +955,15 @@ class MotorJM {
                     const envMap = pmremGenerator.fromEquirectangular(texture).texture;
 
                     this.cena.environment = envMap;
-                    this.cena.background = new THREE.CubeTextureLoader().load([
-                        fileUrl, fileUrl, fileUrl, fileUrl, fileUrl, fileUrl 
-                    ]); 
+                    // For cube textures, you usually need 6 faces. If loading a single JPG/PNG as environment,
+                    // it's typically an equirectangular map for environment, but background is often cube.
+                    // Simplified: if it's a single image, it's usually used as an equirectangular environment map,
+                    // and background often matches or is set to color. Let's make background match environment
+                    // if environment map is set, otherwise use color.
+                    // this.cena.background = new THREE.CubeTextureLoader().load([ // This line requires 6 images
+                    //     fileUrl, fileUrl, fileUrl, fileUrl, fileUrl, fileUrl 
+                    // ]); 
+                    this.cena.background = envMap; // Use the same equirectangular map for background
                     texture.dispose();
                     pmremGenerator.dispose();
                     if (source instanceof File) URL.revokeObjectURL(fileUrl);
@@ -886,8 +1011,8 @@ class MotorJM {
                 if (obj.threeObj.isDirectionalLight && obj.threeObj.shadow) {
                     obj.threeObj.shadow.mapSize.width = opcoes.shadowMapSize;
                     obj.threeObj.shadow.mapSize.height = opcoes.shadowMapSize;
-                    obj.threeObj.shadow.map = null; 
-                    obj.threeObj.shadow.needsUpdate = true; 
+                    obj.threeObj.shadow.map = null; // Clear existing shadow map to force update
+                    obj.threeObj.shadow.needsUpdate = true; // Mark for update
                 }
             });
         }
@@ -998,8 +1123,8 @@ class MotorJM {
 
     executeScript(code, name = '(script)') {
         try {
-            // Ao executar um script (de um mundo), sempre adiciona as luzes padrão DEPOIS,
-            // para que o script do mundo possa definir suas próprias luzes.
+            // Ao executar um script (de um mundo), ele deve assumir uma cena limpa.
+            // O `_configurarIluminacaoPadrao` será chamado *após* para garantir luzes padrão se o script não as adicionar.
             new Function('motor', code)(this); 
             this._configurarIluminacaoPadrao(); // Garante que haja luzes se o script do mundo não adicionar
             console.log(`MotorJM (Info Script): Script '${name}' executado com sucesso.`);
@@ -1025,7 +1150,7 @@ class MotorJM {
                 far: this.cena.fog.far
             } : { enabled: false },
             backgroundConfig: {
-                color: `#${this.cena.background?.getHexString() || '1a1a1a'}`,
+                color: `#${(this.cena.background?.isColor ? this.cena.background.getHexString() : '1a1a1a')}`, // Ensure color is correctly saved
                 environmentMapName: this.cena._backgroundConfig.environmentMapName 
             },
             renderSettings: {
@@ -1083,6 +1208,13 @@ class MotorJM {
                     z: parseFloat(rot.z.toFixed(2)) 
                 },
             };
+            
+            // Add hierarchy properties to options IF they exist for the object
+            if (obj.parentId) {
+                opts.parentId = obj.parentId;
+            }
+            // Children are not saved in the options of the parent, they're derived from child's parentId
+
 
             if (obj.type.startsWith('luz_')) {
                 const luz = obj.threeObj;
@@ -1214,16 +1346,19 @@ class MotorJM {
         const activeWorldFileName = activeWorldPathArray.length > 0 ? activeWorldPathArray[activeWorldPathArray.length - 1] : 'mundo_padrao.js';
         const activeWorldKeyForFs = forFirebase ? this._firebaseEncodeKey(activeWorldFileName) : activeWorldFileName;
         
-        let mundosFolder = fileSystemData.assets.mundos;
-        if (forFirebase) { // Para firebase, todas as chaves na hierarquia são codificadas
-             let currentFsLevel = fileSystemData;
-             activeWorldPathArray.slice(0, -1).forEach(part => {
-                 const encodedPart = this._firebaseEncodeKey(part);
-                 if (!currentFsLevel[encodedPart]) currentFsLevel[encodedPart] = {};
-                 currentFsLevel = currentFsLevel[encodedPart];
-             });
-             mundosFolder = currentFsLevel;
+        let mundosFolder = fileSystemData.assets.mundos; // Start with the common worlds folder
+        let currentFsLevel = fileSystemData; // And the root of fileSystemData
+
+        // Navigate to the correct folder within fileSystemData to place the active world script
+        const pathPartsToTraverse = activeWorldPathArray.slice(0, -1); // All parts except the filename
+        for(const part of pathPartsToTraverse) {
+            const encodedPart = forFirebase ? this._firebaseEncodeKey(part) : part;
+            if (!currentFsLevel[encodedPart]) {
+                currentFsLevel[encodedPart] = {};
+            }
+            currentFsLevel = currentFsLevel[encodedPart];
         }
+        mundosFolder = currentFsLevel; // This is the actual parent folder for the active world file
 
 
         if (!mundosFolder[activeWorldKeyForFs] || typeof mundosFolder[activeWorldKeyForFs] !== 'object') {
@@ -1308,18 +1443,20 @@ class MotorJM {
         const activeWorldFileName = finalActiveWorldPath[finalActiveWorldPath.length - 1];
         const activeWorldFileEntry = currentFsLevel ? currentFsLevel[activeWorldFileName] : null; // Usa nome decodificado para buscar
         
+        let scriptContentToLoad = "";
         if (activeWorldFileEntry && activeWorldFileEntry.type === 'script' && typeof activeWorldFileEntry.content === 'string') {
-            aceEditorInstance.setValue(activeWorldFileEntry.content, -1);
+            scriptContentToLoad = activeWorldFileEntry.content;
         } else {
             console.warn("Nenhum script de mundo ativo encontrado para carregar no editor. Carregando script padrão.");
             const defaultScriptContent = `// Mundo Padrão - Motor Monkey\n\nconsole.log("Mundo Padrão Carregado!");\n`;
-            aceEditorInstance.setValue(defaultScriptContent, -1);
+            scriptContentToLoad = defaultScriptContent;
             const defaultWorldDecodedKey = 'mundo_padrao.js';
             if (!fileSystemInstance.assets.mundos[defaultWorldDecodedKey]) {
-                 fileSystemInstance.assets.mundos[defaultWorldDecodedKey] = { type: 'script', content: defaultScriptContent, url: '' };
+                 fileSystemInstance.assets.mundos[defaultWorldDecodedKey] = { type: 'script', content: defaultScriptContent, url: `data:application/javascript;base64,${btoa(encodeURIComponent(defaultScriptContent))}` };
             }
             finalActiveWorldPath = ['assets','mundos', defaultWorldDecodedKey];
         }
+        aceEditorInstance.setValue(scriptContentToLoad, -1);
         setActiveWorldPathCallback(finalActiveWorldPath); 
 
 
@@ -1348,5 +1485,11 @@ class MotorJM {
                 this.aplicarConfiguracoesDeRenderizacao(sceneSettings.renderSettings);
             }
         }
+
+        // 4. Limpar a cena completamente e executar o script do mundo carregado
+        // Isso garante que todas as luzes e objetos da cena anterior sejam removidos
+        // e que a cena seja populada *apenas* com o que está no script carregado.
+        this.limparCenaTotalmente(); // Usa limparCenaTotalmente para remover tudo, incluindo defaults da sessão anterior
+        this.executeScript(scriptContentToLoad, finalActiveWorldPath.join('/')); // Executa o script que acabou de ser carregado no editor
     }
 }
