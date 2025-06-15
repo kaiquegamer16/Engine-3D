@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
@@ -6,18 +7,20 @@
     <title>Motor Monkey</title>
     <!-- Dependências Externas -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://unpkg.com/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
-    <script src="https://unpkg.com/three@0.128.0/examples/js/controls/TransformControls.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.12/ace.js" type="text/javascript" charset="utf-8"></script>
-    <script src="https://unpkg.com/cannon@0.6.2/build/cannon.min.js"></script>
-    <script src="https://unpkg.com/three@0.128.0/examples/js/loaders/RGBELoader.js"></script>
+    
+    <!-- Dependências Locais (para funcionamento offline) -->
+    <!-- Certifique-se de que esses arquivos estão na mesma pasta ou em um caminho relativo correto -->
+    <script src="three.min.js"></script>
+    <script src="OrbitControls.js"></script>
+    <script src="TransformControls.js"></script>
+    <script src="ace.js" type="text/javascript" charset="utf-8"></script>
+    <script src="cannon.min.js"></script>
+    <script src="RGBELoader.js"></script>
 
-    <!-- Firebase SDKs -->
+    <!-- Firebase SDKs (ainda usa CDN, mas o app principal pode ter lógica offline) -->
     <script type="module">
-        // ... (código Firebase igual ao anterior) ...
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-app.js";
-        import { getAnalytics } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-analytics.js";
+        // import { getAnalytics } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-analytics.js"; // Opcional
         import { getDatabase, ref, set, get, child, onValue } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-database.js"; 
 
         const firebaseConfig = {
@@ -31,19 +34,24 @@
             measurementId: "G-QEEJE4Z7XH"
         };
 
-        const app = initializeApp(firebaseConfig);
-        const analytics = getAnalytics(app); 
-        const database = getDatabase(app); 
+        try {
+            const app = initializeApp(firebaseConfig);
+            // const analytics = getAnalytics(app); 
+            const database = getDatabase(app); 
 
-        window.firebaseRefs = {
-            getDatabase: getDatabase,
-            ref: ref,
-            set: set,
-            get: get,
-            child: child,
-            onValue: onValue 
-        };
-        console.log("Firebase (Info): SDKs inicializados e database disponível via window.firebaseRefs.");
+            window.firebaseRefs = {
+                getDatabase: getDatabase,
+                ref: ref,
+                set: set,
+                get: get,
+                child: child,
+                onValue: onValue 
+            };
+            console.log("Firebase (Info): SDKs inicializados e database disponível via window.firebaseRefs.");
+        } catch (error) {
+            console.warn("Firebase (Aviso): Não foi possível inicializar o Firebase. Funcionalidades de nuvem estarão desabilitadas. Erro:", error.message);
+            window.firebaseRefs = null; // Indica que o Firebase não está disponível
+        }
     </script>
 
     <script src="MotorJM.js"></script>
@@ -61,17 +69,20 @@
             --cor-info: #6bcf6b;
             --cor-erro: #ff6b6b;
             --cor-aviso: #ffd700;
-            --altura-toolbar: 50px; /* Altura da barra de ferramentas principal */
+            --altura-toolbar: 50px; 
             --altura-console-desktop: 200px;
             --altura-console-mobile: 150px;
             --padding-geral: 10px;
+            /* LARGURAS DOS PAINEIS PARA DESKTOP */
+            --largura-left-panel-desktop: 200px; 
+            --largura-right-panel-desktop: 280px; 
         }
         html, body {
             height: 100%;
             width: 100%;
             margin: 0;
             padding: 0;
-            overflow: hidden; /* Previne scroll no body */
+            overflow: hidden; 
         }
         body { 
             font-family: 'Segoe UI', sans-serif; 
@@ -100,48 +111,51 @@
         
         #main-content-container { 
             display: flex; 
-            flex-direction: column; /* Empilha verticalmente em mobile */
+            flex-direction: column; 
             flex-grow: 1; 
             overflow: hidden; 
             padding: var(--padding-geral); 
             box-sizing: border-box; 
             gap: var(--padding-geral);
+            height: calc(100vh - var(--altura-toolbar) - (2 * var(--padding-geral))); 
         }
         #cena-3d { 
-            flex-grow: 1; /* Ocupa o espaço disponível */
+            flex-grow: 1; 
             background-color: #111; 
             border: 1px solid var(--cor-borda); 
             border-radius: 4px; 
             overflow: hidden; 
             position: relative; 
-            min-height: 200px; /* Altura mínima para mobile */
+            min-height: 200px; 
         }
         #cena-3d canvas { display: block; width: 100%; height: 100%; }
         
         #left-panel { 
             background-color: var(--cor-painel); border: 1px solid var(--cor-borda); 
             border-radius: 4px; padding: var(--padding-geral); box-sizing: border-box; 
-            display: none; /* Controlado por JS e media query */
+            display: none; /* Changed to 'none' for default mobile, controlled by JS */
             flex-direction: column; gap: 10px; 
-            width: 200px; /* Largura para desktop */
+            width: var(--largura-left-panel-desktop); 
             flex-shrink: 0;
             overflow-y: auto;
+            max-height: 100%; 
         }
         #right-panel-container { 
             background-color: var(--cor-painel); 
             border: 1px solid var(--cor-borda); 
             border-radius: 4px; 
             box-sizing: border-box; 
-            display: none; /* Controlado por JS e media query */
+            display: none; /* Changed to 'none' for default mobile, controlled by JS */
             flex-direction: column; 
-            width: 300px; 
+            width: var(--largura-right-panel-desktop); 
             flex-shrink: 0;
-            overflow: hidden; /* Importante para o conteúdo interno */
+            overflow: hidden; 
+            max-height: 100%; 
         }
         .panel-tabs {
             display: flex;
             border-bottom: 1px solid var(--cor-borda);
-            flex-shrink: 0; /* Não encolhe */
+            flex-shrink: 0; 
         }
         .panel-tabs button {
             flex-grow: 1;
@@ -165,11 +179,11 @@
             border-radius: 0; 
             flex-grow: 1; 
             overflow-y: auto; 
-            display: none; /* Controlado por JS */
+            display: none; 
+            flex-direction: column; 
         }
         #right-panel.visivel, #file-manager-panel.visivel {
-            display: flex; /* Mostra a aba ativa */
-            flex-direction: column; /* Garante que o conteúdo interno se empilhe */
+            display: flex; 
         }
 
         #left-panel h4, #right-panel h4, #file-manager-panel h4 { margin-top: 0; margin-bottom: 10px; color: var(--cor-texto); border-bottom: 1px solid var(--cor-borda); padding-bottom: 5px; }
@@ -201,14 +215,19 @@
         .property-group { border: 1px solid var(--cor-borda); border-radius: 5px; padding: 10px; margin-bottom: 10px; background-color: #2a2a2a; }
         .property-group h5 { margin-top: 0; margin-bottom: 10px; color: var(--cor-texto); font-size: 1em; }
         
-        /* Código Editor, Console e Modais (sem grandes mudanças de layout aqui) */
         #codigo-editor-container { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 80vw; height: 60vh; z-index: 1000; background-color: var(--cor-editor-console); border: 1px solid var(--cor-borda); border-radius: 8px; box-shadow: 0 5px 15px rgba(0,0,0,0.5); display: none; flex-direction: column; overflow: hidden; }
         #codigo-editor-container.visivel { display: flex; }
         #codigo-editor { flex-grow: 1; width: 100%; height: 100%; font-family: 'Consolas', 'Monaco', 'Lucida Console', monospace; font-size: 0.9em; }
         #codigo-editor-header { background-color: #2a2a2a; padding: 8px 10px; border-bottom: 1px solid var(--cor-borda); display: flex; justify-content: flex-end; gap: 10px; flex-shrink: 0; }
         #codigo-editor-header button { background-color: var(--cor-botao-normal); color: white; border: none; padding: 6px 10px; cursor: pointer; border-radius: 4px; font-size: 0.8em; transition: background-color 0.2s; display: inline-flex; align-items: center; gap: 5px; }
         #codigo-editor-header button:hover { background-color: var(--cor-botao-hover); }
-        #bottom-panel { background-color: var(--cor-painel); border: 1px solid var(--cor-borda); border-radius: 4px; box-sizing: border-box; display: flex; flex-direction: column; flex-shrink: 0; margin: var(--padding-geral); margin-top: 0; height: var(--altura-console-mobile);}
+        #bottom-panel { 
+            background-color: var(--cor-painel); border: 1px solid var(--cor-borda); 
+            border-radius: 4px; box-sizing: border-box; display: flex; 
+            flex-direction: column; flex-shrink: 0; 
+            margin: 0 var(--padding-geral) var(--padding-geral) var(--padding-geral); 
+            height: var(--altura-console-mobile);
+        }
         #bottom-panel.hidden { display: none; }
         #console-header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; padding: 5px 10px; background-color: #2a2a2a; border-bottom: 1px solid var(--cor-borda); flex-shrink: 0; gap: 10px; }
         #console-header h3 { margin: 0; font-size: 1em; color: var(--cor-texto); flex-shrink: 0; }
@@ -227,6 +246,7 @@
         .modal-conteudo h3 { margin-top: 0; color: var(--cor-texto); border-bottom: 1px solid var(--cor-borda); padding-bottom: 10px; margin-bottom: 15px; }
         .modal-conteudo label { display: block; margin-bottom: 8px; color: var(--cor-texto); }
         .modal-conteudo input, .modal-conteudo select { width: calc(100% - 20px); padding: 8px; margin-top: 4px; border: 1px solid #555; background-color: var(--cor-borda); color: var(--cor-texto); border-radius: 4px; }
+        .modal-conteudo input[type="checkbox"] { width: auto; } /* Specific rule for checkboxes */
         .modal-botoes { margin-top: 20px; text-align: right; display: flex; justify-content: flex-end; gap: 10px; }
         .modal-botoes button { padding: 8px 15px; border: none; border-radius: 4px; cursor: pointer; transition: background-color 0.2s; }
         .modal-botoes button:first-child { background-color: #6c757d; color: white; }
@@ -234,15 +254,15 @@
         #settings-fog-enabled, #prop-physics-enabled { width: auto; margin-left: 5px; vertical-align: middle; }
 
         /* Gerenciador de Arquivos */
-        #file-manager-controls { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 10px; }
-        #file-tree-container { flex-grow: 1; overflow-y: auto; border: 1px solid var(--cor-borda); border-radius: 4px; padding: 5px; background-color: #2a2a2a; }
+        #file-manager-controls { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 10px; flex-shrink: 0; } 
+        #file-tree-container { flex-grow: 1; overflow-y: auto; border: 1px solid var(--cor-borda); border-radius: 4px; padding: 5px; background-color: #2a2a2a; min-height: 100px; }
         #file-tree { list-style: none; padding: 0; margin: 0; font-size: 0.9em; }
         #file-tree li { padding: 3px 5px; cursor: pointer; border-radius: 3px; margin-bottom: 1px; display: flex; align-items: center; }
         #file-tree li:hover { background-color: var(--cor-botao-hover); }
         #file-tree li.selected-file { background-color: var(--cor-botao-ativo); font-weight: bold; }
         #file-tree li i { margin-right: 5px; color: #aaa; }
         #file-tree ul { list-style: none; padding-left: 15px; }
-        #file-path-display { font-size: 0.85em; color: #bbb; margin-bottom: 5px; white-space: nowrap; overflow-x: auto; scrollbar-width: none; -ms-overflow-style: none; }
+        #file-path-display { font-size: 0.85em; color: #bbb; margin-bottom: 5px; white-space: nowrap; overflow-x: auto; scrollbar-width: none; -ms-overflow-style: none; flex-shrink: 0; }
         #file-path-display::-webkit-scrollbar { display: none; }
         .context-menu { position: absolute; background-color: var(--cor-painel); border: 1px solid var(--cor-borda); border-radius: 4px; box-shadow: 0 2px 5px rgba(0,0,0,0.5); z-index: 1001; padding: 5px 0; display: none; }
         .context-menu button { display: block; width: 100%; text-align: left; padding: 8px 15px; background: none; border: none; color: var(--cor-texto); cursor: pointer; font-size: 0.9em; }
@@ -258,14 +278,14 @@
         /* Controles no Canvas */
         #canvas-controls-toolbar {
             position: absolute;
-            top: 5px; /* Ajustado para não colar na borda */
+            top: 5px; 
             left: 5px;
             background-color: rgba(51, 51, 51, 0.8);
             padding: 5px;
             border-radius: 4px;
             display: none; 
             z-index: 10;
-            flex-direction: row; /* Botões em linha */
+            flex-direction: row; 
             gap: 5px;
         }
         #canvas-controls-toolbar button {
@@ -275,7 +295,7 @@
             padding: 6px 8px;
             cursor: pointer;
             border-radius: 3px;
-            font-size: 1em; /* Aumenta um pouco para melhor toque */
+            font-size: 1em; 
             transition: background-color 0.2s;
         }
         #canvas-controls-toolbar button:hover {
@@ -286,12 +306,12 @@
         }
         #canvas-delete-button {
             position: absolute;
-            bottom: 5px; /* Ajustado */
+            bottom: 5px; 
             left: 5px;
             background-color: rgba(220, 53, 69, 0.8); 
             color: white;
             border: none;
-            width: 40px; /* Aumentado para melhor toque */
+            width: 40px; 
             height: 40px;
             border-radius: 50%;
             display: none; 
@@ -299,26 +319,47 @@
             justify-content: center;
             cursor: pointer;
             z-index: 10;
-            font-size: 1.2em; /* Aumentado */
+            font-size: 1.2em; 
         }
         #canvas-delete-button:hover {
             background-color: rgba(200, 33, 49, 1);
         }
 
+        #picking-child-feedback {
+            position: fixed;
+            top: 60px; /* Abaixo da toolbar */
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: var(--cor-aviso);
+            color: #333;
+            padding: 10px 15px;
+            border-radius: 5px;
+            z-index: 1002; /* Acima dos context menus */
+            display: none;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+        }
+
 
         @media (min-width: 768px) {
-            #main-content-container { flex-direction: row; align-items: stretch; justify-content: space-between; height: calc(100vh - var(--altura-toolbar) - (2 * var(--padding-geral)) - var(--altura-console-desktop) - var(--padding-geral)); } /* Ajusta altura para desktop */
-            #left-panel { display: flex; width: 220px; margin-right: var(--padding-geral); }
+            #main-content-container { 
+                flex-direction: row; 
+                height: calc(100vh - var(--altura-toolbar) - var(--padding-geral) - var(--altura-console-desktop)); 
+            }
+            #left-panel { display: flex; width: var(--largura-left-panel-desktop); margin-right: var(--padding-geral); }
              #right-panel-container { 
                 display: flex; 
-                width: 320px; 
+                width: var(--largura-right-panel-desktop); 
                 margin-left: 0; 
                 order: 2; 
             }
             #cena-3d { margin-left: 0; margin-right: var(--padding-geral); margin-bottom: 0; order: 1;}
-            
-            #codigo-editor-container { width: 60vw; height: 70vh; }
-            #bottom-panel { height: var(--altura-console-desktop); }
+            #bottom-panel { margin: 0 var(--padding-geral) var(--padding-geral) var(--padding-geral); }
+            #file-manager-panel {
+                 position: static; 
+                 height: 100%; 
+                 width: 100%;  
+                 margin-left: 0;
+            }
         }
     </style>
 </head>
@@ -353,19 +394,20 @@
                 <button id="btn-modo-scale" title="Escalar (S)"><i class="fas fa-expand-alt"></i></button>
             </div>
             <button id="canvas-delete-button" title="Remover Objeto Selecionado"><i class="fas fa-trash-alt"></i></button>
+            <!-- NOVO: Feedback para seleção de filho -->
+            <div id="picking-child-feedback">Clique em um objeto para defini-lo como filho. ESC para cancelar.</div>
         </div>
-        <!-- CONTAINER PARA PAINEL DIREITO E GERENCIADOR DE ARQUIVOS -->
+        
         <div id="right-panel-container">
             <div class="panel-tabs">
                 <button id="btn-tab-properties" class="ativo"><i class="fas fa-sliders-h"></i> Propriedades</button>
                 <button id="btn-tab-files"><i class="fas fa-folder-open"></i> Arquivos</button>
             </div>
-            <div id="right-panel" class="visivel"> <!-- Começa visível -->
-                <!-- O h4 foi removido, o título é implícito pela aba -->
+            <div id="right-panel" class="visivel"> 
                 <div id="object-properties"><p>Selecione um objeto para ver suas propriedades.</p></div>
             </div>
-            <div id="file-manager-panel"> <!-- Começa escondido -->
-                 <h4><i class="fas fa-folder-open"></i> Gerenciador de Arquivos</h4> <!-- Título volta para cá -->
+            <div id="file-manager-panel"> 
+                 <h4><i class="fas fa-folder-open"></i> Gerenciador de Arquivos</h4> 
                 <div id="file-manager-controls">
                     <input type="file" id="file-upload-input" multiple style="display:none;">
                     <button id="btn-upload-file" title="Upload de Arquivo"><i class="fas fa-upload"></i> Upload</button>
@@ -562,6 +604,7 @@
         let currentConsoleFilter = 'all';
         let isPickingChild = false; 
         let prospectiveParentId = null; 
+        let pickChildTimeout = null; // Para cancelar o modo de seleção de filho
 
         const fileSystem = {
             'assets': {
@@ -629,7 +672,6 @@
             btnLoadEnvironmentMap: document.getElementById('btn-load-environment-map'),
             btnClearEnvironmentMap: document.getElementById('btn-clear-environment-map'),
 
-            // btnToggleFileManager: document.getElementById('btn-toggle-file-manager'), // REMOVIDO
             fileManagerPanel: document.getElementById('file-manager-panel'),
             fileUploadInput: document.getElementById('file-upload-input'),
             btnUploadFile: document.getElementById('btn-upload-file'),
@@ -661,7 +703,8 @@
             modalInputValue: document.getElementById('modal-input-value'),
             modalInputHint: document.getElementById('modal-input-hint'),
             btnCancelInputModal: document.getElementById('btn-cancel-input-modal'),
-            btnConfirmInputModal: document.getElementById('btn-confirm-input-modal')
+            btnConfirmInputModal: document.getElementById('btn-confirm-input-modal'),
+            pickingChildFeedback: document.getElementById('picking-child-feedback') // NOVO
         };
         let currentInputModalCallback = null; 
 
@@ -671,8 +714,8 @@
             setupAceEditor();
             setupEventListeners();
             createDefaultWorldIfNotExists();
-            loadWorldScriptToEditor(activeWorldPath); 
-            recarregarMundoAtivo(); 
+            loadWorldScriptToEditor(activeWorldPath); // Load initial world script
+            recarregarMundoAtivo(); // Execute the initial world script
             updateUI();
             logConsole('info', 'Editor inicializado. Bem-vindo ao Motor Monkey!');
             updateConsoleFilter('all');
@@ -753,7 +796,7 @@
         function recarregarMundoAtivo() { 
             if (isPlaying) togglePlayStop(); 
             try { 
-                motor.limparCena(); 
+                motor.limparCenaTotalmente(); // Clear everything when reloading world script
                 const currentWorldScript = aceEditor.getValue(); 
                 motor.executeScript(currentWorldScript, activeWorldPath.join('/')); 
                 logConsole('info', `Mundo "${activeWorldPath.join('/')}" recarregado com sucesso.`); 
@@ -766,17 +809,29 @@
             loadGraphicSettingsUI(); 
         }
 
-        function togglePlayStop() { isPlaying = !isPlaying; const icon = ui.btnToggleAnimation.querySelector('i'); const leftPanel = document.getElementById('left-panel'); const rightPanelContainer = document.getElementById('right-panel-container'); 
+        function togglePlayStop() { 
+            isPlaying = !isPlaying; 
+            const icon = ui.btnToggleAnimation.querySelector('i'); 
+            // Added checks for elements before accessing style
+            const leftPanel = document.getElementById('left-panel'); 
+            const rightPanelContainer = document.getElementById('right-panel-container'); 
+            const canvasControlsToolbar = ui.canvasControlsToolbar;
+            const canvasDeleteButton = ui.canvasDeleteButton;
+
             if (isPlaying) { 
                 motor.play(); 
                 icon.classList.replace('fa-play', 'fa-stop'); 
                 ui.btnToggleAnimation.title = "Parar Simulação"; 
-                [leftPanel, rightPanelContainer, ui.canvasControlsToolbar, ui.canvasDeleteButton].forEach(p => {if(p){p.style.pointerEvents = "none"; p.style.opacity = "0.5";}}); 
+                [leftPanel, rightPanelContainer, canvasControlsToolbar, canvasDeleteButton].forEach(p => {
+                    if(p){ p.style.pointerEvents = "none"; p.style.opacity = "0.5"; }
+                }); 
             } else { 
                 motor.parar(); 
                 icon.classList.replace('fa-stop', 'fa-play'); 
                 ui.btnToggleAnimation.title = "Iniciar Simulação"; 
-                [leftPanel, rightPanelContainer, ui.canvasControlsToolbar, ui.canvasDeleteButton].forEach(p => {if(p){p.style.pointerEvents = "auto"; p.style.opacity = "1";}}); 
+                [leftPanel, rightPanelContainer, canvasControlsToolbar, canvasDeleteButton].forEach(p => {
+                    if(p){ p.style.pointerEvents = "auto"; p.style.opacity = "1"; }
+                }); 
                 updateCanvasControlsVisibility(); 
             } 
         }
@@ -784,14 +839,12 @@
             const name = document.getElementById('modal-obj-name').value || 'novo_objeto';
             const id = `${name.replace(/\s+/g, '_').toLowerCase()}_${Date.now()}`;
             const type = document.getElementById('modal-obj-tipo').value;
-            const isLight = ['ambiente', 'direcional', 'ponto'].includes(type);
-
-            if (isLight) {
-                motor.adicionarObjeto(id, name, { type: type, color: '#ffffff', intensity: 1 });
-            } else if (type === 'camera') { 
+            
+            if (type === 'camera') { 
                 motor.adicionarObjeto(id, name, 'camera', { position: {x:0, y:5, z:15}, fov: 75, near: 0.1, far: 1000 });
-            }
-            else {
+            } else if (['ambiente', 'direcional', 'ponto'].includes(type)) { // Correctly call adicionarLuz
+                motor.adicionarLuz(id, name, { type: type, color: '#ffffff', intensity: 1 });
+            } else { // Geometric objects
                 const bodyType = (type === 'plano') ? 'static' : 'dynamic';
                 const collisionShape = (type === 'plano') ? 'plane' : (type === 'esfera' ? 'sphere' : 'box'); 
                 motor.adicionarObjeto(id, name, type, { physics: { bodyType: bodyType, mass: 1, friction: 0.5, restitution: 0.5, collisionShape: collisionShape, linearDamping: 0.01, angularDamping: 0.01 } });
@@ -829,18 +882,22 @@
             toggleModal(ui.modalSaveFirebase, false); 
 
             const activeWorldScriptContent = aceEditor.getValue();
-            const activeWorldFolder = getFolder(activeWorldPath.slice(0, -1)); 
-            if (activeWorldFolder) {
-                const activeWorldFileName = activeWorldPath[activeWorldPath.length - 1];
-                const encodedFileName = motor._firebaseEncodeKey(activeWorldFileName);
-                 activeWorldFolder[encodedFileName] = { 
-                    type: 'script',
-                    content: activeWorldScriptContent, 
-                    url: `data:application/javascript;base64,${btoa(encodeURIComponent(activeWorldScriptContent))}` 
-                };
+            // Ensure the active world script is updated in the fileSystem *before* generating project data
+            let currentFsLevelForActiveWorld = fileSystem;
+            for(let i = 0; i < activeWorldPath.length - 1; i++) {
+                const part = activeWorldPath[i];
+                if (!currentFsLevelForActiveWorld[part]) currentFsLevelForActiveWorld[part] = {}; // Create if path missing
+                currentFsLevelForActiveWorld = currentFsLevelForActiveWorld[part];
             }
+            const activeWorldFileName = activeWorldPath[activeWorldPath.length - 1];
+            currentFsLevelForActiveWorld[activeWorldFileName] = { 
+                type: 'script',
+                content: activeWorldScriptContent, 
+                url: `data:application/javascript;base64,${btoa(encodeURIComponent(activeWorldScriptContent))}` 
+            };
 
-            const projectData = motor.gerarDadosDoProjeto(aceEditor.getValue(), fileSystem, true, activeWorldPath); 
+
+            const projectData = motor.gerarDadosDoProjeto(activeWorldScriptContent, fileSystem, true, activeWorldPath); 
 
             try {
                 await firebase.set(firebase.ref(firebase.getDatabase(), 'projects/' + projectId), {
@@ -925,7 +982,7 @@
                 if (snapshot.exists()) {
                     const loadedData = snapshot.val().projectContent; 
                     
-                    motor.limparCena(); // Limpa a cena ATUAL antes de aplicar os dados do novo projeto
+                    // motor.limparCena(); // REMOVED: aplicarDadosDoProjeto now uses limparCenaTotalmente internally
                     
                     motor.aplicarDadosDoProjeto(loadedData, aceEditor, fileSystem, (newActiveWorldPath) => {
                         activeWorldPath = newActiveWorldPath; 
@@ -933,7 +990,7 @@
                     logConsole('info', `Projeto "${motor._firebaseDecodeKey(selectedFirebaseProjectId)}" carregado do Firebase com sucesso!`);
                     renderFileTree();
                     loadGraphicSettingsUI(); 
-                    recarregarMundoAtivo(); 
+                    // recarregarMundoAtivo(); // REMOVED: Logic is now handled within aplicarDadosDoProjeto
                 } else {
                     logConsole('error', `Erro: Projeto "${motor._firebaseDecodeKey(selectedFirebaseProjectId)}" não encontrado ao tentar carregar.`);
                 }
@@ -979,19 +1036,26 @@
 
         function updateUI() { 
             const showPanels = window.innerWidth >= 768; 
-            document.getElementById('left-panel').style.display = showPanels ? 'flex' : 'none'; 
-            document.getElementById('right-panel-container').style.display = showPanels ? 'flex' : 'none';
+            // Added checks for elements before accessing style
+            if (ui.leftPanel) { 
+                ui.leftPanel.style.display = showPanels ? 'flex' : 'none'; 
+            }
+            if (ui.rightPanelContainer) { 
+                ui.rightPanelContainer.style.display = showPanels ? 'flex' : 'none';
+            }
         }
         
         // --- HIERARQUIA DE OBJETOS ---
         function updateHierarchy() {
             ui.objectHierarchy.innerHTML = '';
             const objects = motor.getObjetosNaCena();
-            const rootObjects = Object.values(objects).filter(obj => !obj.parentId && !obj.id.endsWith('_padrao'));
+            
+            // Filter out default lights and identify root objects (no parentId)
+            const rootObjects = Object.values(objects).filter(obj => !obj.id.endsWith('_padrao_removivel') && !obj.parentId);
 
             const createHierarchyNode = (obj, parentElement, level = 0) => {
                 const li = document.createElement('li');
-                li.style.paddingLeft = `${level * 10}px`; // Indentação
+                li.style.paddingLeft = `${level * 10}px`; 
                 li.dataset.id = obj.id;
 
                 const toggle = document.createElement('span');
@@ -1021,13 +1085,16 @@
                     e.stopPropagation(); 
                     if (isPickingChild) {
                         if (prospectiveParentId && prospectiveParentId !== obj.id) {
-                             motor.setParent(obj.id, prospectiveParentId);
+                             motor.setParent(objetoSelecionadoId, obj.id); // Define o objeto previamente selecionado como filho do clicado
                              updateHierarchy();
-                             logConsole('info', `Objeto "${obj.name || obj.id}" definido como filho de "${motor.getObjetosNaCena()[prospectiveParentId].name || prospectiveParentId}".`);
+                             logConsole('info', `Objeto "${motor.getObjetosNaCena()[objetoSelecionadoId]?.name || objetoSelecionadoId}" definido como filho de "${motor.getObjetosNaCena()[obj.id]?.name || obj.id}".`);
+                        } else {
+                            logConsole('warning', 'Não é possível definir um objeto como filho dele mesmo ou de um objeto sem um pai prospectivo.');
                         }
                         isPickingChild = false;
                         prospectiveParentId = null;
                         document.body.style.cursor = 'default';
+                        ui.pickingChildFeedback.style.display = 'none'; // Esconde feedback
                         document.removeEventListener('keydown', handlePickingChildEscape, true);
                         document.removeEventListener('click', handlePickingChildClick, true);
                     } else {
@@ -1092,6 +1159,7 @@
                 isPickingChild = false;
                 prospectiveParentId = null;
                 document.body.style.cursor = 'default';
+                ui.pickingChildFeedback.style.display = 'none';
                 logConsole('info', 'Seleção de filho cancelada.');
                 document.removeEventListener('keydown', handlePickingChildEscape, true);
                 document.removeEventListener('click', handlePickingChildClick, true);
@@ -1100,28 +1168,32 @@
 
         function handlePickingChildClick(e) {
             if (isPickingChild && !e.target.closest('button, input, select, textarea, .context-menu, .modal-overlay')) {
-                // Se o clique não foi em um objeto válido da hierarquia, cancela
-                const clickedLi = e.target.closest('#object-hierarchy li');
-                if (!clickedLi || !clickedLi.dataset.id) {
-                    isPickingChild = false;
-                    prospectiveParentId = null;
-                    document.body.style.cursor = 'default';
-                    logConsole('info', 'Seleção de filho cancelada (clique fora de um objeto).');
-                }
-                // A lógica de definir o pai acontece no event listener do clique do item da hierarquia
-                document.removeEventListener('keydown', handlePickingChildEscape, true);
-                document.removeEventListener('click', handlePickingChildClick, true);
+                // The actual logic of setting the parent happens in the object hierarchy li click listener
+                // and the motor's selection handler. This listener is just to catch clicks outside.
+                // If a click outside doesn't hit a selectable object, it should cancel the picking mode.
+                // However, `_manipularSelecao` already handles deseclection if no object is hit.
+                // The explicit cancel needs to be triggered if no object is selected *after* the click,
+                // which is better handled by `selecionarObjeto` or `_manipularSelecao`.
+                // For now, let's ensure the escape key is the primary cancel.
             }
         }
 
 
         function handleSetParent() {
-            prospectiveParentId = ui.objectHierarchyContextMenu.dataset.objectId;
-            if (!prospectiveParentId) return;
+            prospectiveParentId = objetoSelecionadoId; // The selected object will be the child
+            if (!prospectiveParentId) {
+                logConsole('warning', 'Selecione um objeto para ser o filho antes de definir um pai.');
+                return;
+            }
+            if (motor.getObjetosNaCena()[prospectiveParentId].parentId) {
+                logConsole('warning', 'O objeto já tem um pai. Remova o pai existente antes de definir um novo.');
+                return;
+            }
 
             isPickingChild = true;
             document.body.style.cursor = 'crosshair'; 
-            logConsole('info', `Selecione um objeto na cena ou na hierarquia para torná-lo filho de "${motor.getObjetosNaCena()[prospectiveParentId].name || prospectiveParentId}". Pressione ESC para cancelar.`);
+            ui.pickingChildFeedback.style.display = 'block';
+            logConsole('info', `Selecione um objeto na cena ou na hierarquia para torná-lo pai de "${motor.getObjetosNaCena()[prospectiveParentId].name || prospectiveParentId}". Pressione ESC para cancelar.`);
             hideObjectHierarchyContextMenu();
             document.addEventListener('keydown', handlePickingChildEscape, true);
             document.addEventListener('click', handlePickingChildClick, true);
@@ -1141,29 +1213,32 @@
         // Função para controlar a visibilidade dos controles do canvas
         function updateCanvasControlsVisibility() {
             const show = objetoSelecionadoId && !isPlaying;
-            ui.canvasControlsToolbar.style.display = show ? 'flex' : 'none';
-            ui.canvasDeleteButton.style.display = show ? 'flex' : 'none';
+            if (ui.canvasControlsToolbar) ui.canvasControlsToolbar.style.display = show ? 'flex' : 'none';
+            if (ui.canvasDeleteButton) ui.canvasDeleteButton.style.display = show ? 'flex' : 'none';
         }
 
         function selecionarObjeto(id) { 
             if(isPlaying) return; 
             if (isPickingChild) { 
                 if (prospectiveParentId && prospectiveParentId !== id) {
-                     motor.setParent(id, prospectiveParentId);
+                     motor.setParent(prospectiveParentId, id); // Current SELECTED object (prospectiveParentId) becomes child of clicked object (id)
                      updateHierarchy();
-                     logConsole('info', `Objeto "${motor.getObjetosNaCena()[id]?.name || id}" definido como filho de "${motor.getObjetosNaCena()[prospectiveParentId]?.name || prospectiveParentId}".`);
+                     logConsole('info', `Objeto "${motor.getObjetosNaCena()[prospectiveParentId]?.name || prospectiveParentId}" definido como filho de "${motor.getObjetosNaCena()[id]?.name || id}".`);
+                } else if (prospectiveParentId === id) {
+                    logConsole('warning', 'Não é possível definir um objeto como pai de si mesmo.');
                 }
                 isPickingChild = false;
                 prospectiveParentId = null;
                 document.body.style.cursor = 'default';
+                ui.pickingChildFeedback.style.display = 'none';
                 document.removeEventListener('keydown', handlePickingChildEscape, true);
                 document.removeEventListener('click', handlePickingChildClick, true);
                 
-                if (objetoSelecionadoId === prospectiveParentId) {
-                    // Mantém o pai selecionado
-                } else if (prospectiveParentId) {
-                    // Seleciona o pai se ele não era o objeto selecionado
-                    selecionarObjeto(prospectiveParentId); 
+                // Keep the clicked object selected if it's not the same as the original prospective parent
+                if (objetoSelecionadoId === id) { // If the clicked object is already the selected one, do nothing
+                    // do nothing
+                } else {
+                    motor.selecionarObjeto(id); // Select the clicked object as the new selected object
                 }
                 return; 
             }
@@ -1359,7 +1434,7 @@
             ui.settingsShadowsOptions.style.display = ui.settingsShadowsEnabled.checked ? 'block' : 'none';
             ui.settingsToneMappingOptions.style.display = ui.settingsToneMappingEnabled.checked ? 'block' : 'none';
 
-            ui.settingsBackgroundColor.value = `#${motor.cena.background?.getHexString() || '1a1a1a'}`;
+            ui.settingsBackgroundColor.value = `#${motor.cena.background?.isColor ? motor.cena.background.getHexString() : '1a1a1a'}`;
             ui.settingsEnvironmentMapName.value = motor.cena._backgroundConfig.environmentMapName || 'Nenhuma';
         }
 
@@ -1482,7 +1557,7 @@
             ui.ctxNewFolder.style.display = 'block'; 
             ui.ctxNewWorld.style.display = 'block'; 
             ui.ctxApplyTexture.style.display = (type === 'image' && objetoSelecionadoId && motor.getObjetosNaCena()[objetoSelecionadoId]?.threeObj?.isMesh) ? 'block' : 'none';
-            ui.ctxOpenWorld.style.display = (type === 'script' && currentPath.join('/') === 'assets/mundos') ? 'block' : 'none';
+            ui.ctxOpenWorld.style.display = (type === 'script' && currentPath.join('/') === 'assets/mundos') ? 'block' : 'none'; // Only allow opening worlds from assets/mundos
             ui.ctxRenameFile.style.display = name ? 'block' : 'none'; 
             ui.ctxDeleteFile.style.display = name ? 'block' : 'none';
 
@@ -1504,7 +1579,7 @@
 
         function handleNewFolder() {
             showInputModal('Nova Pasta', 'Nome da Pasta:', 'Apenas letras, números, hífens e underscores.', '', (folderName) => {
-                if (folderName && !folderName.includes('/') && !folderName.includes('\\')) { 
+                if (folderName && !folderName.includes('/') && !folderName.includes('\\') && /^[a-zA-Z0-9_-]+$/.test(folderName)) { 
                     const targetFolder = selectedFileElement && selectedFileElement.dataset.type === 'folder' ? 
                                          getFolder(currentPath.concat(selectedFileElement.dataset.name)) : 
                                          getFolder(currentPath);
@@ -1516,7 +1591,7 @@
                         logConsole('warning', `Pasta '${folderName}' já existe ou nome inválido.`);
                     }
                 } else if (folderName) {
-                    logConsole('warning', 'Nome da pasta contém caracteres inválidos.');
+                    logConsole('warning', 'Nome da pasta contém caracteres inválidos ou está vazio.');
                 }
             });
             hideFileContextMenu();
@@ -1528,24 +1603,27 @@
                     if (!worldName.endsWith('.js')) {
                         worldName += '.js';
                     }
+                    if (!/^[a-zA-Z0-9_-]+\.js$/.test(worldName)) { // Basic validation for world name
+                        logConsole('warning', 'Nome do mundo contém caracteres inválidos.');
+                        return;
+                    }
                     
                     let targetMundosFolder;
                     let targetPathArray;
 
-                    if (selectedFileElement && selectedFileElement.dataset.type === 'folder' && 
-                        selectedFileElement.dataset.name === 'mundos' && currentPath.join('/') === 'assets') {
-                        targetMundosFolder = getFolder(currentPath.concat('mundos'));
-                        targetPathArray = ['assets', 'mundos'];
-                    } else if (currentPath.join('/') === 'assets/mundos') { 
+                    // Logic to determine where the new world should be created
+                    // It should always be within a 'mundos' subfolder
+                    if (currentPath.length >= 1 && currentPath[0] === 'assets' && currentPath[1] === 'mundos') {
                         targetMundosFolder = getFolder(currentPath);
                         targetPathArray = [...currentPath];
-                    } else { 
-                        if (!fileSystem.assets) fileSystem.assets = {};
-                        if (!fileSystem.assets.mundos) fileSystem.assets.mundos = {};
+                    } else if (fileSystem.assets && fileSystem.assets.mundos) {
+                        targetMundosFolder = fileSystem.assets.mundos;
+                        targetPathArray = ['assets', 'mundos'];
+                    } else { // Should not happen with createDefaultWorldIfNotExists, but fallback
+                        fileSystem['assets'] = { textures: {}, scripts: {}, mundos: {} };
                         targetMundosFolder = fileSystem.assets.mundos;
                         targetPathArray = ['assets', 'mundos'];
                     }
-
 
                     if (targetMundosFolder && !targetMundosFolder[worldName]) {
                         const defaultWorldScript = `// Novo Mundo: ${worldName}\n\nmotor.adicionarObjeto('chao_${motor._firebaseEncodeKey(worldName.replace('.js',''))}', 'Chão', 'plano', { material: {color: 'green'} });\n\nconsole.log("Mundo '${worldName}' carregado!");\n`;
@@ -1594,7 +1672,7 @@
 
                     currentFolder[file.name] = {
                         type: fileType,
-                        url: fileContent, 
+                        url: fileType === 'script' ? `data:application/javascript;base64,${btoa(encodeURIComponent(fileContent))}` : fileContent, // Base64 encode script content for URL
                         content: fileType === 'script' ? fileContent : null 
                     };
                     renderFileTree();
@@ -1672,12 +1750,13 @@
             const oldName = selectedFileElement.dataset.name;
             
             showInputModal(`Renomear "${oldName}"`, 'Novo Nome:', 'Apenas letras, números, hífens e underscores.', oldName, (newName) => {
-                if (newName && newName.trim() !== '' && newName !== oldName && !newName.includes('/') && !newName.includes('\\')) {
+                if (newName && newName.trim() !== '' && newName !== oldName && !newName.includes('/') && !newName.includes('\\') && /^[a-zA-Z0-9_.-]+$/.test(newName)) {
                     const currentFolder = getFolder(currentPath);
                     if (currentFolder && currentFolder[oldName] && !currentFolder[newName]) {
                         currentFolder[newName] = currentFolder[oldName];
                         delete currentFolder[oldName];
                         
+                        // Update activeWorldPath if the renamed file is the active world
                         if (activeWorldPath.join('/') === currentPath.join('/') + '/' + oldName) {
                             activeWorldPath = currentPath.concat(newName);
                         }
@@ -1723,8 +1802,8 @@
         }
 
         function openWorldFromFileManager() {
-            if (!selectedFileElement || selectedFileElement.dataset.type !== 'script') {
-                logConsole('warning', 'Selecione um arquivo de mundo (.js) para abrir.');
+            if (!selectedFileElement || selectedFileElement.dataset.type !== 'script' || currentPath.join('/') !== 'assets/mundos') {
+                logConsole('warning', 'Selecione um arquivo de mundo (.js) na pasta "mundos" para abrir.');
                 return;
             }
             const worldName = selectedFileElement.dataset.name;
@@ -1783,7 +1862,7 @@
             ui.canvasDeleteButton.onclick = () => {
                 if (objetoSelecionadoId) {
                     motor.removerObjeto(objetoSelecionadoId); 
-                    // A UI será atualizada pelo evento 'objetoDesselecionado'
+                    updateHierarchy(); // Update hierarchy after deletion
                 }
             };
 
@@ -1802,7 +1881,8 @@
                 toggleModal(ui.modalSettings, false);
             };
             window.onresize = updateUI;
-            window.addEventListener('objetoSelecionado', (e) => selecionarObjeto(e.detail.id));
+            // Changed this listener to avoid direct call to selecionarObjeto, let the _manipularSelecao handle it
+            // window.addEventListener('objetoSelecionado', (e) => selecionarObjeto(e.detail.id)); 
             window.addEventListener('objetoDesselecionado', () => { 
                 objetoSelecionadoId = null; 
                 updateHierarchy(); 
@@ -1814,6 +1894,7 @@
                     isPickingChild = false;
                     prospectiveParentId = null;
                     document.body.style.cursor = 'default';
+                    ui.pickingChildFeedback.style.display = 'none';
                     logConsole('info', 'Seleção de filho cancelada.');
                     document.removeEventListener('keydown', handlePickingChildEscape, true);
                     document.removeEventListener('click', handlePickingChildClick, true);
